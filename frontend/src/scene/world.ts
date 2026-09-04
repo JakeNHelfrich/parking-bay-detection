@@ -3,6 +3,8 @@ import * as THREE from 'three';
 export interface World {
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
+  /** The WebGL canvas; used as the capture source by the frame pipeline. */
+  readonly domElement: HTMLCanvasElement;
   render(): void;
   dispose(): void;
 }
@@ -55,6 +57,7 @@ export function createWorld(container: HTMLElement): World {
   return {
     scene,
     camera,
+    domElement: renderer.domElement,
     render(): void {
       renderer.render(scene, camera);
     },

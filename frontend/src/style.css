@@ -9,6 +9,17 @@ body,
   background: #8ec5e8;
 }
 
+#app {
+  position: relative;
+}
+
 #app canvas {
   display: block;
+}
+
+/* The overlay sits above the WebGL canvas and never intercepts input. */
+#overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
