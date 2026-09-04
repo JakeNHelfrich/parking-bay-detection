@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Model weights (auto-downloaded, large)
+*.pt
+runs/
+
+# Env & tooling
+.env
+.DS_Store
+.pytest_cache/
+.ruff_cache/
+node_modules/.vite/
+
+# Editors
+.vscode/
+.idea/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/

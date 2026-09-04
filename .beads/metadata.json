@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "parking_bay_detection",
+  "project_id": "41de1917-7332-4952-8390-b24144e1af60"
+}
