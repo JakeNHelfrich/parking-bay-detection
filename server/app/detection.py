@@ -71,10 +71,26 @@ class StubDetector:
     frame, so the frontend overlay has both a stable and a moving box to draw.
     Positions are functions of ``frame_id`` only — no randomness, no clock —
     which keeps tests reproducible.
+
+    The canned boxes are screen-space projections of the simulated scene for
+    the default camera (fov 55, eye (-22, 24, 30), target (0, 0, -2)) at a
+    16:9 view — the same projection that generated ``bays.json`` — so boxes
+    visually align with the rendered trucks:
+
+    - parked truck: standing at bay 0 (world x=-6.9, z=-4.8, nose toward lane)
+    - driving truck: sweeping along the lane from world x=-30 to x=+40;
+      position and size lerp between the projected endpoint rects (the true
+      path curves slightly under perspective, close enough for a stub)
     """
 
     DRIVE_LOOP_FRAMES = 90
     model_label = "stub"
+
+    # Projected bbox of a truck parked at bay 0: [x, y, w, h], normalized.
+    PARKED_BBOX = (0.3857, 0.4562, 0.0499, 0.0924)
+    # Projected endpoint rects of the lane sweep (world x=-30 and x=+40).
+    DRIVE_START = (0.0011, 0.7218, 0.1209, 0.153)
+    DRIVE_END = (0.7708, 0.2942, 0.0431, 0.0512)
 
     def __init__(self, confidence_threshold: float = 0.35) -> None:
         self._confidence_threshold = confidence_threshold
@@ -82,20 +98,21 @@ class StubDetector:
     def infer(self, image: Image.Image, frame_id: int = 0) -> list[Detection]:
         del image  # The stub never looks at pixels.
         detections = [
-            Detection(
-                cls="truck",
-                conf=0.91,
-                bbox=(0.10, 0.55, 0.14, 0.10),
-            )
+            Detection(cls="truck", conf=0.91, bbox=self.PARKED_BBOX)
         ]
-        # Driving truck sweeps left → right, then wraps around.
+        # Driving truck sweeps along the lane, left-front → right-far, then
+        # wraps around. Position and size lerp between the projected
+        # endpoint rects; the perspective path curves slightly, ignored here.
         phase = (max(frame_id, 0) % self.DRIVE_LOOP_FRAMES) / self.DRIVE_LOOP_FRAMES
-        drive_x = 0.05 + phase * 0.80
+        bbox = tuple(
+            start + (end - start) * phase
+            for start, end in zip(self.DRIVE_START, self.DRIVE_END, strict=True)
+        )
         detections.append(
             Detection(
                 cls="truck",
                 conf=0.88,
-                bbox=(drive_x, 0.30, 0.16, 0.11),
+                bbox=bbox,
             )
         )
         return [det for det in detections if det.conf >= self._confidence_threshold]

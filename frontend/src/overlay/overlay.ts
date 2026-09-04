@@ -13,6 +13,8 @@ const OFFLINE_COLOR = '#ff5252';
 const FONT = '12px ui-monospace, SFMono-Regular, Menlo, monospace';
 
 export interface HudStats {
+  /** frameId of the latest accepted (non-stale) detection result. */
+  readonly frameId: number | null;
   readonly latencyMs: number | null;
   readonly inferenceMs: number | null;
   readonly captureFps: number;
@@ -29,7 +31,7 @@ export class Overlay {
   private readonly ctx: CanvasRenderingContext2D;
   private latest: DetectionsMessage | null = null;
   private status: ConnectionStatus = 'connecting';
-  private stats: HudStats = { latencyMs: null, inferenceMs: null, captureFps: 0 };
+  private stats: HudStats = { frameId: null, latencyMs: null, inferenceMs: null, captureFps: 0 };
   private bays: readonly BayDef[] = [];
   private bayStates: readonly BayState[] = [];
 
@@ -123,14 +125,15 @@ export class Overlay {
   }
 
   private drawHud(): void {
-    const { latencyMs, inferenceMs, captureFps } = this.stats;
+    const { frameId, latencyMs, inferenceMs, captureFps } = this.stats;
     const latency = latencyMs === null ? '—' : `${latencyMs.toFixed(1)}ms`;
     const inference = inferenceMs === null ? '—' : `${inferenceMs.toFixed(1)}ms`;
+    const frame = frameId === null ? '—' : `#${frameId}`;
     const detCount = this.latest?.detections.length ?? 0;
     const occupied = this.bayStates.filter((state) => state.occupied).length;
     const bays =
       this.bays.length === 0 ? '' : ` | bays: ${occupied}/${this.bays.length} FULL`;
-    const line = `detect: ${this.status} | latency: ${latency} | infer: ${inference} | capture: ${captureFps.toFixed(0)}fps | boxes: ${detCount}${bays}`;
+    const line = `detect: ${this.status} | frame: ${frame} | latency: ${latency} | infer: ${inference} | capture: ${captureFps.toFixed(0)}fps | boxes: ${detCount}${bays}`;
 
     this.ctx.font = FONT;
     const metrics = this.ctx.measureText(line);

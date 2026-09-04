@@ -103,6 +103,7 @@ function frame(now: number): void {
   maybeCaptureAndSend(now);
   tickFps(now);
   overlay.setHud({
+    frameId: latestDetections?.frameId ?? null,
     latencyMs: latestDetections?.latencyMs ?? null,
     inferenceMs: latestDetections?.inferenceMs ?? null,
     captureFps,
