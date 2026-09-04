@@ -6,6 +6,8 @@ import {
   type DetectionsMessage,
 } from './net/protocol';
 import { isStaleFrame } from './net/stale-frame';
+import { loadBayLayout } from './bays/bay-defs';
+import { computeBayStates } from './bays/occupancy';
 import { Overlay } from './overlay/overlay';
 import { createBayField } from './scene/bays';
 import { TruckSimulator } from './scene/truck-simulator';
@@ -44,12 +46,26 @@ const client = new DetectClient({
     if (isStaleFrame(message.frameId, latestFrameId)) return; // dropped, never queued
     latestDetections = message;
     overlay.setDetections(message);
+    if (bayLayout !== null) overlay.setBayStates(computeBayStates(bayLayout.bays, message.detections));
   },
   onStatus(status: ConnectionStatus) {
     overlay.setStatus(status);
   },
 });
 client.connect();
+
+// Bay occupancy (M5): bays.json is data, not code — fetched at runtime from
+// public/, validated, and purely informational. A failed load just means no
+// bay overlay; detection keeps running.
+let bayLayout: Awaited<ReturnType<typeof loadBayLayout>> = null;
+void loadBayLayout().then((layout) => {
+  if (layout === null) {
+    console.warn('[bays] bays.json missing or invalid — bay overlay disabled');
+    return;
+  }
+  bayLayout = layout;
+  overlay.setBays(layout.bays);
+});
 
 let latestFrameId = 0;
 let latestDetections: DetectionsMessage | null = null;

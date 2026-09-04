@@ -133,7 +133,7 @@ The frontend connects to `ws://localhost:8000/ws/detect` by default (override wi
 | **M2 — Server skeleton** | FastAPI app with `/health` and `/ws/detect`. YOLO stubbed out (returns canned boxes) so the frontend can be built before the model lands. |
 | **M3 — Frame pipeline** | ✅ Canvas capture + throttling, WS client, overlay rendering of returned boxes, latency HUD. End-to-end with the stub. |
 | **M4 — Real detection** | ✅ YOLOv8n backend with lazy single load, COCO class filter, env-tunable confidence threshold, real latency in the HUD. Verified end-to-end over the WS. |
-| **M5 — Bay occupancy** | `bays.json` loading, IoU matching, FULL/EMPTY coloring and counts. |
+| **M5 — Bay occupancy** | ✅ `bays.json` loading, IoU matching, FULL/EMPTY coloring and counts. |
 | **M6 — Tuning & polish** | Threshold tuning, stale-frame handling under load, optional synthetic-data fine-tuning loop (sim ground truth → auto-label → fine-tune YOLO). |
 
 ## Known considerations

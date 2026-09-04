@@ -1,8 +1,12 @@
+import type { BayDef } from '../bays/bay-defs';
+import type { BayState } from '../bays/occupancy';
 import type { ConnectionStatus } from '../net/detect-client';
 import { bboxToPixelRect } from './coords';
 import type { DetectionsMessage } from '../net/protocol';
 
 const BOX_COLOR = '#ffb020';
+const BAY_EMPTY_COLOR = '#4caf50';
+const BAY_FULL_COLOR = '#ff5252';
 const LABEL_BG = 'rgba(0, 0, 0, 0.65)';
 const HUD_COLOR = 'rgba(255, 255, 255, 0.92)';
 const OFFLINE_COLOR = '#ff5252';
@@ -26,6 +30,8 @@ export class Overlay {
   private latest: DetectionsMessage | null = null;
   private status: ConnectionStatus = 'connecting';
   private stats: HudStats = { latencyMs: null, inferenceMs: null, captureFps: 0 };
+  private bays: readonly BayDef[] = [];
+  private bayStates: readonly BayState[] = [];
 
   private readonly container: HTMLElement;
 
@@ -53,6 +59,16 @@ export class Overlay {
     this.stats = stats;
   }
 
+  /** Installs the bay geometry once `bays.json` has loaded. */
+  setBays(bays: readonly BayDef[]): void {
+    this.bays = bays;
+  }
+
+  /** Replaces the per-bay occupancy states for the latest detection result. */
+  setBayStates(states: readonly BayState[]): void {
+    this.bayStates = states;
+  }
+
   resize(): void {
     this.canvas.width = this.container.clientWidth;
     this.canvas.height = this.container.clientHeight;
@@ -63,8 +79,28 @@ export class Overlay {
   draw(): void {
     const { width, height } = this.canvas;
     this.ctx.clearRect(0, 0, width, height);
+    this.drawBays(width, height);
     this.drawDetections(width, height);
     this.drawHud();
+  }
+
+  private drawBays(width: number, height: number): void {
+    if (this.bays.length === 0) return;
+    const occupiedById = new Map(this.bayStates.map((state) => [state.bayId, state.occupied]));
+    this.ctx.font = FONT;
+    for (const bay of this.bays) {
+      const occupied = occupiedById.get(bay.id) ?? false;
+      const rect = bboxToPixelRect(bay.rect, width, height);
+      this.ctx.strokeStyle = occupied ? BAY_FULL_COLOR : BAY_EMPTY_COLOR;
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+      const label = `${bay.id} ${occupied ? 'FULL' : 'EMPTY'}`;
+      const metrics = this.ctx.measureText(label);
+      this.ctx.fillStyle = LABEL_BG;
+      this.ctx.fillRect(rect.x - 1, rect.y + rect.h + 2, metrics.width + 6, 14);
+      this.ctx.fillStyle = occupied ? BAY_FULL_COLOR : BAY_EMPTY_COLOR;
+      this.ctx.fillText(label, rect.x + 2, rect.y + rect.h + 13);
+    }
   }
 
   private drawDetections(width: number, height: number): void {
@@ -91,7 +127,10 @@ export class Overlay {
     const latency = latencyMs === null ? '—' : `${latencyMs.toFixed(1)}ms`;
     const inference = inferenceMs === null ? '—' : `${inferenceMs.toFixed(1)}ms`;
     const detCount = this.latest?.detections.length ?? 0;
-    const line = `detect: ${this.status} | latency: ${latency} | infer: ${inference} | capture: ${captureFps.toFixed(0)}fps | boxes: ${detCount}`;
+    const occupied = this.bayStates.filter((state) => state.occupied).length;
+    const bays =
+      this.bays.length === 0 ? '' : ` | bays: ${occupied}/${this.bays.length} FULL`;
+    const line = `detect: ${this.status} | latency: ${latency} | infer: ${inference} | capture: ${captureFps.toFixed(0)}fps | boxes: ${detCount}${bays}`;
 
     this.ctx.font = FONT;
     const metrics = this.ctx.measureText(line);
