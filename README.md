@@ -63,7 +63,7 @@ A per-frame text header sent immediately before each binary JPEG, so the server 
 
 Malformed input (undecodable JPEG, missing frame header, invalid JSON) is answered with `{ "type": "error", "message": "…" }` and the socket stays open.
 
-While the real model is pending (M2), the server runs a **stub detector** (`PARKING_DETECTOR=stub`) that returns canned, deterministic trucks: one parked and one sweeping across the frame per `frameId`.
+By default the server runs a **stub detector** (`PARKING_DETECTOR=stub`) that returns canned, deterministic trucks: one parked and one sweeping across the frame per `frameId` — useful for frontend work without model weights. Set `PARKING_DETECTOR=yolo` (plus `pip install -e ".[model]"`) to run real YOLOv8n inference: the model lazy-loads exactly once (weight load failures surface as a 503 on `/health`), detections are filtered to the configured COCO classes (`PARKING_ALLOWED_CLASSES`, default `truck`), and `PARKING_CONF_THRESHOLD` tunes confidence.
 
 ### Parking bay occupancy
 
@@ -132,7 +132,7 @@ The frontend connects to `ws://localhost:8000/ws/detect` by default (override wi
 | **M1 — Simulation** | Three.js scene: ground plane, parking bays, trucks that drive in, park, and leave. Orbit camera. |
 | **M2 — Server skeleton** | FastAPI app with `/health` and `/ws/detect`. YOLO stubbed out (returns canned boxes) so the frontend can be built before the model lands. |
 | **M3 — Frame pipeline** | ✅ Canvas capture + throttling, WS client, overlay rendering of returned boxes, latency HUD. End-to-end with the stub. |
-| **M4 — Real detection** | Swap in YOLOv8n, filter to COCO `truck` class, confidence threshold, measure real latency. |
+| **M4 — Real detection** | ✅ YOLOv8n backend with lazy single load, COCO class filter, env-tunable confidence threshold, real latency in the HUD. Verified end-to-end over the WS. |
 | **M5 — Bay occupancy** | `bays.json` loading, IoU matching, FULL/EMPTY coloring and counts. |
 | **M6 — Tuning & polish** | Threshold tuning, stale-frame handling under load, optional synthetic-data fine-tuning loop (sim ground truth → auto-label → fine-tune YOLO). |
 

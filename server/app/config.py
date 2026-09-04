@@ -2,8 +2,8 @@
 
 All knobs are overridable via environment variables so deployment can tune
 inference without code changes. Defaults are aimed at local development with
-the stub detector (M2); the real YOLO model (M4) is selected via
-``PARKING_DETECTOR=yolo``.
+the stub detector; select the real model with ``PARKING_DETECTOR=yolo``
+(requires the ``model`` extra).
 """
 
 from __future__ import annotations
@@ -48,11 +48,12 @@ class Settings:
     """Immutable service configuration."""
 
     # "stub" returns canned boxes (no weights needed); "yolo" runs the real
-    # model (requires the `model` extra, wired up in M4).
+    # model (requires the `model` extra).
     detector: str = field(default_factory=lambda: _env_str("PARKING_DETECTOR", "stub"))
-    # Model name is only meaningful for the real detector; it is surfaced via
-    # /health so the frontend HUD can display what is serving.
-    model_name: str = field(default_factory=lambda: _env_str("PARKING_MODEL_NAME", "stub"))
+    # Model name for the YOLO backend (e.g. "yolov8n.pt" or a path to custom
+    # weights). Empty means "the backend's default"; whatever serves is
+    # surfaced via /health so the frontend HUD can display it.
+    model_name: str = field(default_factory=lambda: _env_str("PARKING_MODEL_NAME", ""))
     confidence_threshold: float = field(
         default_factory=lambda: _env_float("PARKING_CONF_THRESHOLD", 0.35)
     )

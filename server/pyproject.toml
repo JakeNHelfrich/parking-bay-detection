@@ -31,6 +31,9 @@ packages = ["app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Ensure the repo's tests package wins over ultralytics-platform's stray
+# site-packages `tests` package (regular package beats namespace package).
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100

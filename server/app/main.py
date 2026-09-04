@@ -43,8 +43,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Load the detector once at startup; a failure is surfaced via /health."""
     app.state.detector: Detector | None = None
     app.state.detector_error: str | None = None
+    app.state.model_label: str = settings.model_name or "unknown"
     try:
-        app.state.detector = create_detector(settings)
+        detector = create_detector(settings)
+        # Lazily-loaded backends expose ensure_loaded; force the weight load
+        # here (once, at startup) so failures surface on /health, not mid-frame.
+        ensure_loaded = getattr(detector, "ensure_loaded", None)
+        if ensure_loaded is not None:
+            ensure_loaded()
+        app.state.detector = detector
+        app.state.model_label = getattr(detector, "model_label", settings.model_name or "unknown")
     except ModelLoadError as exc:
         # Keep the app up: /health reports 503 instead of crashing the service.
         app.state.detector_error = str(exc)
@@ -62,13 +70,13 @@ def health() -> JSONResponse:
             status_code=503,
             content={
                 "status": "error",
-                "model": settings.model_name,
+                "model": app.state.model_label,
                 "detail": app.state.detector_error,
             },
         )
     return JSONResponse(
         status_code=200,
-        content={"status": "ok", "model": settings.model_name},
+        content={"status": "ok", "model": app.state.model_label},
     )
 
 

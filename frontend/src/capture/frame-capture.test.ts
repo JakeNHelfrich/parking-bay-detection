@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   CAPTURE_FPS,
-  CAPTURE_MIN_INTERVAL_MS,
   CAPTURE_HEIGHT,
   CAPTURE_WIDTH,
   shouldStartCapture,

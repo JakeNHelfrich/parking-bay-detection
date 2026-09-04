@@ -65,7 +65,7 @@ class Detector(Protocol):
 
 
 class StubDetector:
-    """Canned, deterministic detector used until the real model lands (M4).
+    """Canned, deterministic detector; default backend for tests and dev.
 
     Produces one truck permanently parked plus one truck driving across the
     frame, so the frontend overlay has both a stable and a moving box to draw.
@@ -74,6 +74,7 @@ class StubDetector:
     """
 
     DRIVE_LOOP_FRAMES = 90
+    model_label = "stub"
 
     def __init__(self, confidence_threshold: float = 0.35) -> None:
         self._confidence_threshold = confidence_threshold
@@ -100,6 +101,197 @@ class StubDetector:
         return [det for det in detections if det.conf >= self._confidence_threshold]
 
 
+# COCO-80 class index → name. Used to resolve ``allowed_classes`` (given as
+# names, e.g. "truck") to model class ids without needing the weights loaded.
+COCO_CLASS_NAMES: tuple[str, ...] = (
+    "person",
+    "bicycle",
+    "car",
+    "motorcycle",
+    "airplane",
+    "bus",
+    "train",
+    "truck",
+    "boat",
+    "traffic light",
+    "fire hydrant",
+    "stop sign",
+    "parking meter",
+    "bench",
+    "bird",
+    "cat",
+    "dog",
+    "horse",
+    "sheep",
+    "cow",
+    "elephant",
+    "bear",
+    "zebra",
+    "giraffe",
+    "backpack",
+    "umbrella",
+    "handbag",
+    "tie",
+    "suitcase",
+    "frisbee",
+    "skis",
+    "snowboard",
+    "sports ball",
+    "kite",
+    "baseball bat",
+    "baseball glove",
+    "skateboard",
+    "surfboard",
+    "tennis racket",
+    "bottle",
+    "wine glass",
+    "cup",
+    "fork",
+    "knife",
+    "spoon",
+    "bowl",
+    "banana",
+    "apple",
+    "sandwich",
+    "orange",
+    "broccoli",
+    "carrot",
+    "hot dog",
+    "pizza",
+    "donut",
+    "cake",
+    "chair",
+    "couch",
+    "potted plant",
+    "bed",
+    "dining table",
+    "toilet",
+    "tv",
+    "laptop",
+    "mouse",
+    "remote",
+    "keyboard",
+    "cell phone",
+    "microwave",
+    "oven",
+    "toaster",
+    "sink",
+    "refrigerator",
+    "book",
+    "clock",
+    "vase",
+    "scissors",
+    "teddy bear",
+    "hair drier",
+    "toothbrush",
+)
+
+
+class YoloDetector:
+    """Real YOLO backend (Ultralytics), loaded lazily exactly once.
+
+    - The heavy ``ultralytics`` import and weight load happen on first use —
+      never per connection, never per frame. ``ensure_loaded`` lets the app
+      lifespan force the load at startup so failures surface on ``/health``.
+    - ``allowed_classes`` are COCO names (default ``["truck"]`` = class 7);
+      they are resolved to class ids up front, without the model.
+    - Results are normalized to ``[x, y, w, h]`` in 0..1, top-left origin —
+      Ultralytics pixel boxes already use a top-left origin, so this is a
+      straight division by frame size, no flip.
+    - ``model_factory`` is an injection seam for tests: it stands in for the
+      ``ultralytics.YOLO`` constructor so tests never need weights or network.
+    """
+
+    DEFAULT_MODEL = "yolov8n.pt"
+
+    def __init__(
+        self,
+        model_name: str = DEFAULT_MODEL,
+        allowed_classes: list[str] | None = None,
+        confidence_threshold: float = 0.35,
+        model_factory: Callable[[str], object] | None = None,
+    ) -> None:
+        self.model_label = model_name
+        self._model_name = model_name
+        self._confidence_threshold = confidence_threshold
+        self._model_factory = model_factory
+        self._model: object | None = None
+
+        classes = allowed_classes if allowed_classes is not None else ["truck"]
+        name_to_id = {name: idx for idx, name in enumerate(COCO_CLASS_NAMES)}
+        unknown = [cls for cls in classes if cls not in name_to_id]
+        if unknown:
+            raise ModelLoadError(f"allowed_classes not in COCO-80: {unknown!r}")
+        self._class_ids = sorted({name_to_id[cls] for cls in classes})
+
+    def ensure_loaded(self) -> None:
+        """Force the lazy weight load; raises ModelLoadError on failure."""
+        self._ensure_model()
+
+    def _ensure_model(self) -> object:
+        if self._model is None:
+            try:
+                # Deferred heavy import: base installs (tests, stub mode) never
+                # need ultralytics/torch. Ignored here and re-raised below.
+                from ultralytics import YOLO  # noqa: PLC0415
+
+                factory = self._model_factory if self._model_factory is not None else YOLO
+                self._model = factory(self._model_name)
+            except Exception as exc:
+                if isinstance(exc, ModelLoadError):
+                    raise
+                raise ModelLoadError(
+                    f"failed to load YOLO model {self._model_name!r}: {exc}"
+                ) from exc
+        return self._model
+
+    def infer(self, image: Image.Image, frame_id: int = 0) -> list[Detection]:
+        del frame_id  # stateless backend; frame_id is only meaningful to stubs
+        model = self._ensure_model()
+        results = model.predict(  # type: ignore[attr-defined]
+            source=image,
+            conf=self._confidence_threshold,
+            classes=self._class_ids,
+            verbose=False,
+        )
+        return _result_to_detections(results[0], image.size)
+
+
+def _result_to_detections(
+    result: object,
+    image_size: tuple[int, int],
+) -> list[Detection]:
+    """Convert one Ultralytics result to normalized wire Detections.
+
+    Ultralytics gives pixel ``xyxy`` boxes with a top-left origin — the same
+    convention as the wire protocol — so normalization is a straight divide by
+    frame width/height with clipping into 0..1. No y-flip.
+    """
+    boxes = getattr(result, "boxes", None)
+    if boxes is None:
+        return []
+    width, height = image_size
+    if width <= 0 or height <= 0:
+        return []
+    xyxy_list = boxes.xyxy.tolist()
+    conf_list = boxes.conf.tolist()
+    cls_list = boxes.cls.tolist()
+    names: dict[int, str] = dict(getattr(result, "names", {}))
+    detections: list[Detection] = []
+    for xyxy, conf, cls_id in zip(xyxy_list, conf_list, cls_list, strict=True):
+        x1, y1, x2, y2 = (float(v) for v in xyxy)
+        nx1, ny1 = max(x1, 0.0) / width, max(y1, 0.0) / height
+        nx2, ny2 = min(x2, width) / width, min(y2, height) / height
+        detections.append(
+            Detection(
+                cls=names.get(int(cls_id), str(int(cls_id))),
+                conf=float(conf),
+                bbox=(nx1, ny1, max(nx2 - nx1, 0.0), max(ny2 - ny1, 0.0)),
+            )
+        )
+    return detections
+
+
 def create_detector(settings: object) -> Detector:
     """Factory for the configured detector backend.
 
@@ -107,6 +299,11 @@ def create_detector(settings: object) -> Detector:
     and returns a ready-to-use detector. Raises :class:`ModelLoadError` if the
     requested backend cannot be initialized — callers surface this as a 503 on
     ``/health`` rather than crashing.
+
+    The YOLO backend is *lazily* loaded: constructing it is cheap (no weights,
+    no torch import); the model loads exactly once on first use (or when the
+    app lifespan calls ``ensure_loaded`` at startup, which is how load
+    failures surface on ``/health``).
     """
     detector_kind = getattr(settings, "detector", "stub")
     confidence_threshold = getattr(settings, "confidence_threshold", 0.35)
@@ -115,11 +312,16 @@ def create_detector(settings: object) -> Detector:
         return StubDetector(confidence_threshold=confidence_threshold)
 
     if detector_kind == "yolo":
-        # Real backend lands in M4; until then, selecting it is an explicit
-        # configuration error rather than a silent fallback to the stub.
-        raise ModelLoadError(
-            "detector='yolo' is not implemented yet (planned for M4); set PARKING_DETECTOR=stub"
-        )
+        model_name = str(getattr(settings, "model_name", "") or YoloDetector.DEFAULT_MODEL)
+        allowed_classes = list(getattr(settings, "allowed_classes", ["truck"]))
+        try:
+            return YoloDetector(
+                model_name=model_name,
+                allowed_classes=allowed_classes,
+                confidence_threshold=confidence_threshold,
+            )
+        except ModelLoadError:
+            raise
 
     raise ModelLoadError(f"unknown detector kind: {detector_kind!r}")
 
