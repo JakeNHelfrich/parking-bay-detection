@@ -22,6 +22,7 @@ node_modules/.vite/
 # Editors
 .vscode/
 .idea/
+.pi/
 
 # Beads / Dolt files (added by bd init)
 .dolt/

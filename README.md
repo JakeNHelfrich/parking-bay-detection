@@ -31,10 +31,18 @@ A TypeScript + Three.js frontend renders a simulated parking lot with moving tru
 
 ### Wire protocol
 
-**Frontend → Backend** — binary WebSocket message (single JPEG frame), with a small text-header control message sent once per session to negotiate capture size:
+**Frontend → Backend** — binary WebSocket messages (single JPEG frame), with two small text control messages:
+
+A session header sent once to negotiate capture size:
 
 ```json
 { "type": "hello", "captureWidth": 960, "captureHeight": 540 }
+```
+
+A per-frame text header sent immediately before each binary JPEG, so the server can echo the frame ID:
+
+```json
+{ "type": "frame", "frameId": 412 }
 ```
 
 **Backend → Frontend** — JSON text message per frame processed:
@@ -52,6 +60,10 @@ A TypeScript + Three.js frontend renders a simulated parking lot with moving tru
 ```
 
 `bbox` is `[x, y, w, h]` normalized to `0..1`, origin at the **top-left** of the frame (matching canvas coordinates).
+
+Malformed input (undecodable JPEG, missing frame header, invalid JSON) is answered with `{ "type": "error", "message": "…" }` and the socket stays open.
+
+While the real model is pending (M2), the server runs a **stub detector** (`PARKING_DETECTOR=stub`) that returns canned, deterministic trucks: one parked and one sweeping across the frame per `frameId`.
 
 ### Parking bay occupancy
 
