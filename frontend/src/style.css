@@ -1,3 +1,8 @@
+/* Design tokens + base layer load first; rules below keep current behavior
+   (the sim-scene sky backdrop) until the UI shell components land. */
+@import './ui/styles/tokens.css';
+@import './ui/styles/base.css';
+
 html,
 body,
 #app {

@@ -1,0 +1,65 @@
+/**
+ * Minimal base/reset layer.
+ *
+ * Loads after tokens.css. Deliberately tiny: it normalizes the document so
+ * token-consuming components start from a predictable baseline. Any styling
+ * beyond this belongs in components, which must use var() tokens — no
+ * hardcoded values here beyond the background/font wiring below.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-body-size);
+  font-weight: var(--text-body-weight);
+  line-height: var(--leading-normal);
+  color: var(--color-ink);
+  background: var(--color-page);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: var(--text-title-weight);
+  line-height: var(--leading-tight);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+img,
+canvas {
+  display: block;
+  max-width: 100%;
+}

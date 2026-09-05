@@ -1,0 +1,124 @@
+/**
+ * Design tokens — single source of truth for all UI styling.
+ *
+ * Extracted from design/desktop.png, design/tablet.png, design/mobile.png
+ * (pixel-sampled). All three mockups share one palette and scale; the layout
+ * differs only in arrangement.
+ *
+ * CONVENTION: this is the ONLY file where raw color/font/spacing/radius/
+ * shadow values may appear. Components and layers must consume tokens via
+ * var(--...) and must not hardcode values. See src/ui/styles/README.md.
+ */
+
+:root {
+  /* ------------------------------------------------------------------ */
+  /* Palette                                                             */
+  /* ------------------------------------------------------------------ */
+
+  /* Page background: light gray-green wash behind everything (#f5f7f7). */
+  --color-page: #f5f7f7;
+  /* Card / panel surface: white. */
+  --color-surface: #ffffff;
+  /* Simulator viewport: dark slate backdrop (#20343c). */
+  --color-viewport: #20343c;
+  /* Muted slate used for secondary elements inside the viewport
+     (e.g. empty-state icon circle #4d6d73). */
+  --color-viewport-muted: #4d6d73;
+
+  /* Ink: near-black slate for headings, wordmark, primary text (#1f333c). */
+  --color-ink: #1f333c;
+  /* Muted meta text: gray-slate for secondary copy, stats, timestamps
+     (#6b7f86). */
+  --color-muted: #6b7f86;
+  /* Text on dark surfaces (viewport headings, primary button labels). */
+  --color-on-dark: #ffffff;
+
+  /* Primary green accent — status pills, "Inference healthy", connected
+     states. Light tinted background + strong green text/dot. */
+  --color-accent-bg: #ebf5f1; /* pill / healthy-banner tint */
+  --color-accent: #4ea477;    /* dot, icon strokes, live indicators */
+  --color-accent-strong: #336a56; /* accent text on light tint */
+
+  /* Dark button: navy-teal "Start simulation" style (#223d4a). */
+  --color-btn-dark: #223d4a;
+  --color-btn-dark-hover: #1a3140;
+
+  /* Semantic status colors (not both visible in mockups; red reserved for
+     occupied/offline per convention). */
+  --color-ok: var(--color-accent);        /* clear bay / connected */
+  --color-ok-bg: var(--color-accent-bg);
+  --color-danger: #b3403a;                /* occupied / offline */
+  --color-danger-bg: #f9ebea;
+  --color-danger-strong: #8f2f2a;
+
+  /* Border: hairline gray on light surfaces (#dee4e7). */
+  --color-border: #dee4e7;
+
+  /* ------------------------------------------------------------------ */
+  /* Typography                                                          */
+  /* ------------------------------------------------------------------ */
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+
+  /* Wordmark ("BAYWATCH"): bold, wide letter-spacing. */
+  --text-wordmark-size: 1.125rem;   /* 18px */
+  --text-wordmark-weight: 700;
+  --text-wordmark-tracking: 0.08em;
+
+  /* Card titles ("Bay 01"): semibold. */
+  --text-title-size: 1rem;          /* 16px */
+  --text-title-weight: 600;
+
+  /* Body copy. */
+  --text-body-size: 0.9375rem;      /* 15px */
+  --text-body-weight: 400;
+
+  /* Muted meta ("98% confidence", "18 fps"): slightly smaller. */
+  --text-meta-size: 0.8125rem;      /* 13px */
+  --text-meta-weight: 400;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+
+  /* ------------------------------------------------------------------ */
+  /* Spacing                                                             */
+  /* ------------------------------------------------------------------ */
+
+  --space-1: 0.25rem;   /* 4px  */
+  --space-2: 0.5rem;    /* 8px  */
+  --space-3: 0.75rem;   /* 12px */
+  --space-4: 1rem;      /* 16px */
+  --space-5: 1.25rem;   /* 20px */
+  --space-6: 1.5rem;    /* 24px */
+  --space-8: 2rem;      /* 32px */
+
+  /* ------------------------------------------------------------------ */
+  /* Radii                                                               */
+  /* ------------------------------------------------------------------ */
+
+  --radius-card: 0.625rem;    /* 10px — cards, pills with borders */
+  --radius-viewport: 1rem;    /* 16px — simulator viewport */
+  --radius-button: 0.625rem;  /* 10px — buttons */
+  --radius-pill: 999px;       /* full round — status pills */
+
+  /* ------------------------------------------------------------------ */
+  /* Borders & shadows                                                   */
+  /* ------------------------------------------------------------------ */
+
+  --border-width: 1px;
+  --border-hairline: var(--border-width) solid var(--color-border);
+
+  /* Subtle elevation for floating surfaces (header bar, cards). */
+  --shadow-card: 0 1px 2px rgb(31 51 60 / 0.05),
+    0 2px 8px rgb(31 51 60 / 0.06);
+  /* Slightly stronger for overlays / popovers, if needed later. */
+  --shadow-raised: 0 4px 16px rgb(31 51 60 / 0.12);
+
+  /* ------------------------------------------------------------------ */
+  /* Motion                                                              */
+  /* ------------------------------------------------------------------ */
+
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+}
