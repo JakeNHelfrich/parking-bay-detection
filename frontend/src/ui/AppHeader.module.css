@@ -47,9 +47,35 @@
   gap: var(--space-3);
 }
 
+/* Pill + camera chip sub-row; visual no-op on desktop, restacks on mobile. */
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 /* Camera chip: the ghost Button primitive with an icon + fixed label. */
 .chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* --------------------------------------------------------------------- */
+/* Mobile (<768px, same breakpoint as App.module.css): header restacks to */
+/* three rows per design/mobile.png — brand / pill + chip / start button. */
+/* --------------------------------------------------------------------- */
+
+@media (max-width: 767px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
+
+  .actions {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
 }

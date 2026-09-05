@@ -48,11 +48,16 @@ export function AppHeader() {
         <span className={styles.wordmark}>BAYWATCH</span>
       </div>
       <div className={styles.actions}>
-        <Pill tone={pill.tone}>{pill.label}</Pill>
-        <Button variant="ghost" className={styles.chip} aria-label={`Camera ${CAMERA_ID}`}>
-          <CameraIcon size={15} />
-          {CAMERA_ID}
-        </Button>
+        {/* Pill + chip stay grouped so mobile can restack brand / pill+chip /
+            start button as three rows (design/mobile.png) while desktop keeps
+            one row. */}
+        <div className={styles.metaRow}>
+          <Pill tone={pill.tone}>{pill.label}</Pill>
+          <Button variant="ghost" className={styles.chip} aria-label={`Camera ${CAMERA_ID}`}>
+            <CameraIcon size={15} />
+            {CAMERA_ID}
+          </Button>
+        </div>
         <Button onClick={() => store.setSimRunning(!simRunning)}>
           {simRunning ? 'Stop simulation' : 'Start simulation'}
         </Button>
