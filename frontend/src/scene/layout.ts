@@ -18,6 +18,11 @@ export const BAY_DEPTH = 8.4; // extent along Z (rigid truck 7.2 m + clearance)
 export const BAY_GAP = 1.2; // clearance between neighboring bays along X
 export const BAY_COUNT = 4;
 
+// Tarmac pad edges (depot layout, from the approved mockup): the north side
+// carries the bay rank plus working margin, the south side is open kerb.
+export const PAD_NORTH_EDGE = -(LANE_WIDTH / 2 + BAY_DEPTH + 1.6); // -14
+export const PAD_SOUTH_EDGE = LANE_WIDTH / 2 + 7; // 11
+
 /** Yaw (rotation.y) that parks a truck nose-out toward the lane. */
 export function bayHeading(side: BaySide): number {
   return side === 'north' ? -Math.PI / 2 : Math.PI / 2;

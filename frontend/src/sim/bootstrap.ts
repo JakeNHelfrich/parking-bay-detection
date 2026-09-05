@@ -20,6 +20,7 @@ import { loadBayLayout } from '../bays/bay-defs';
 import { computeBayStates } from '../bays/occupancy';
 import { Overlay } from '../overlay/overlay';
 import { createBayField } from '../scene/bays';
+import { createDepotScenery } from '../scene/scenery';
 import { TruckSimulator } from '../scene/truck-simulator';
 import { createWorld } from '../scene/world';
 import { initGroundTruthCapture, isGroundTruthMode } from '../scene/gt';
@@ -31,6 +32,7 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
   // no subscription is needed here and the render loop stays decoupled.
   const world = createWorld(container);
   const bays = createBayField(world.scene);
+  createDepotScenery(world.scene, bays);
   const simulator = new TruckSimulator(world.scene, bays);
 
   // Dev-only dataset capture (`?gt`): render the sim but replace the whole
