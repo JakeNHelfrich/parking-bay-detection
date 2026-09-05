@@ -47,7 +47,8 @@ These are architectural contracts. Do not break them without updating `README.md
 2. **Decoupled render and inference.** The Three.js render loop must never await or block on detection results. Detections are consumed asynchronously; the overlay always draws the latest available result. Stale results (frameId older than the latest captured frame) are dropped, never queued.
 3. **Frame ID echo.** Every response must echo the `frameId` it was given, plus `latencyMs` and `inferenceMs`. Tests should assert this.
 4. **Bays are data, not code.** Bay geometry lives in `frontend/public/bays.json` as normalized rects. Changes to bay layout must not require TS changes.
-5. **Server never touches pixels it doesn't decode.** Frame decoding happens in exactly one place (`server/app/detection.py` or its decode helper). Keep binary-frame handling out of route logic.
+5. **Bays have identity; the model never learns them.** A bay's identity is its stable `id` in the bay map, not anything the detector produces. The CV model only detects *trucks*; bay state is derived purely in the frontend by matching truck bboxes against bay rects (IoU + center-in-rect, greedy one-to-one — see `frontend/src/bays/occupancy.ts`). Never ask the server to classify or segment bays, and never derive bay identity from model output. This keeps bay layout swappable without retraining and occupancy logic testable without a model. (A real-world deployment would add a CV calibration pass that *writes* the bay map; runtime matching would not change.)
+6. **Server never touches pixels it doesn't decode.** Frame decoding happens in exactly one place (`server/app/detection.py` or its decode helper). Keep binary-frame handling out of route logic.
 
 ## Code conventions
 
