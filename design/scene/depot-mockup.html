@@ -1,0 +1,1202 @@
+<title>Depot Yard Mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+<style>
+  :root {
+    --ground: #eceee9;
+    --panel: #ffffff;
+    --panel-2: #f5f7f3;
+    --line: #d8ddd6;
+    --line-soft: #e6eae3;
+    --ink: #16211d;
+    --ink-2: #4d5a54;
+    --ink-3: #7d8a83;
+    --signal: #c9762a;
+    --detect: #1f9d5f;
+    --tarmac: #2c3238;
+    --shadow: 0 1px 2px rgba(22, 33, 29, .06), 0 8px 24px rgba(22, 33, 29, .06);
+    --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0e1416;
+      --panel: #151d20;
+      --panel-2: #1b2428;
+      --line: #2a3539;
+      --line-soft: #212b2f;
+      --ink: #e7ece9;
+      --ink-2: #a4b1ac;
+      --ink-3: #74827c;
+      --signal: #e79c4e;
+      --detect: #46cf8a;
+      --tarmac: #0a0f11;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 32px rgba(0, 0, 0, .35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0e1416;
+    --panel: #151d20;
+    --panel-2: #1b2428;
+    --line: #2a3539;
+    --line-soft: #212b2f;
+    --ink: #e7ece9;
+    --ink-2: #a4b1ac;
+    --ink-3: #74827c;
+    --signal: #e79c4e;
+    --detect: #46cf8a;
+    --tarmac: #0a0f11;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 32px rgba(0, 0, 0, .35);
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 22px 72px; display: flex; flex-direction: column; gap: 26px; }
+
+  header.masthead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 28px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--ink-3);
+  }
+  h1 {
+    font-family: var(--display); font-weight: 700; font-size: clamp(28px, 4vw, 40px);
+    letter-spacing: -.022em; line-height: 1.05; margin: 6px 0 0; text-wrap: balance;
+  }
+  .lede { max-width: 62ch; color: var(--ink-2); margin: 8px 0 0; }
+  .masthead .meta { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); text-align: right; line-height: 1.9; }
+  .masthead .meta b { color: var(--ink-2); font-weight: 500; }
+
+  /* ---- viewport ---- */
+  .stage { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; box-shadow: var(--shadow); overflow: hidden; }
+  .stage-bar {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 10px 14px; background: var(--panel-2); border-bottom: 1px solid var(--line-soft);
+    font-family: var(--mono); font-size: 11px; letter-spacing: .06em; color: var(--ink-3);
+  }
+  .stage-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--detect); display: inline-block; margin-right: 7px; vertical-align: 1px; }
+  .stage-bar .spacer { flex: 1; }
+  .viewport { position: relative; width: 100%; aspect-ratio: 16 / 9; background: var(--tarmac); cursor: grab; touch-action: none; }
+  .viewport:active { cursor: grabbing; }
+  .viewport canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .viewport .hint {
+    position: absolute; left: 12px; bottom: 10px; font-family: var(--mono); font-size: 10.5px;
+    letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.55);
+    background: rgba(0,0,0,.35); padding: 3px 8px; border-radius: 2px; pointer-events: none;
+  }
+
+  /* ---- controls ---- */
+  .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1px; background: var(--line-soft); border-top: 1px solid var(--line-soft); }
+  .control { background: var(--panel); padding: 13px 14px 15px; display: flex; flex-direction: column; gap: 9px; }
+  .control > .k { font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+  .seg button {
+    flex: 1; appearance: none; border: 0; border-right: 1px solid var(--line); background: transparent;
+    color: var(--ink-2); font-family: var(--display); font-size: 12.5px; font-weight: 600; letter-spacing: -.005em;
+    padding: 7px 6px; cursor: pointer; transition: background .12s ease, color .12s ease;
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button:hover { background: var(--panel-2); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+  .seg button:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+  .control .note { font-size: 12.5px; color: var(--ink-3); min-height: 2.6em; }
+  .control .note b { color: var(--ink-2); font-weight: 500; }
+
+  /* ---- spec ---- */
+  .specs { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 26px 34px; }
+  .spec h2 {
+    font-family: var(--display); font-size: 15px; font-weight: 700; letter-spacing: -.01em; margin: 0 0 4px;
+    display: flex; align-items: baseline; gap: 9px;
+  }
+  .spec h2 .tag { font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: .12em; color: var(--ink-3); text-transform: uppercase; }
+  .spec p { margin: 0 0 10px; color: var(--ink-2); font-size: 13.5px; }
+  .spec ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .spec li { font-size: 13.5px; color: var(--ink-2); padding-left: 15px; position: relative; }
+  .spec li::before { content: ""; position: absolute; left: 0; top: .62em; width: 6px; height: 1px; background: var(--ink-3); }
+  code { font-family: var(--mono); font-size: 12px; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line-soft); border-radius: 2px; padding: 1px 4px; }
+
+  .ledger { border-top: 1px solid var(--line); padding-top: 16px; }
+  .ledger table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ledger th {
+    text-align: left; font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--ink-3); padding: 0 12px 8px 0; border-bottom: 1px solid var(--line-soft);
+  }
+  .ledger td { padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line-soft); color: var(--ink-2); vertical-align: top; }
+  .ledger td:first-child { color: var(--ink); font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+  .ledger td.num { font-variant-numeric: tabular-nums; }
+  .scroll-x { overflow-x: auto; }
+
+  footer { color: var(--ink-3); font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 14px; }
+  body.bare .wrap { max-width: none; padding: 0; gap: 0; }
+  body.bare .masthead, body.bare .specs, body.bare .ledger, body.bare footer,
+  body.bare .controls, body.bare .stage-bar, body.bare .hint { display: none; }
+  body.bare .stage { border: 0; border-radius: 0; box-shadow: none; }
+  @media (prefers-reduced-motion: reduce) { * { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div>
+      <div class="eyebrow">Sim scene · proposal</div>
+      <h1>Depot Yard Mockups</h1>
+      <p class="lede">Three live options for the three.js lot: four bays on the far side only, a proper articulated
+        vehicle, and scenery that gives the camera something to look at. Drag the viewport to orbit; switch any
+        dimension to compare against what ships today.</p>
+    </div>
+    <div class="meta">
+      CAM-04 · 16:9 fixed<br>
+      <b>frontend/src/scene/</b><br>
+      layout · truck · bays · world
+    </div>
+  </header>
+
+  <section class="stage">
+    <div class="stage-bar">
+      <span><span class="dot"></span>Mock feed</span>
+      <span id="statline">4 bays monitored · 1 vehicle tracked</span>
+      <span class="spacer"></span>
+      <span id="camline">CAM-04</span>
+    </div>
+    <div class="viewport" id="viewport">
+      <canvas id="gl"></canvas>
+      <canvas id="ov"></canvas>
+      <div class="hint">Drag to orbit</div>
+    </div>
+    <div class="controls">
+      <div class="control">
+        <span class="k">Bay layout</span>
+        <div class="seg" id="seg-layout" role="group" aria-label="Bay layout">
+          <button data-v="current" aria-pressed="false">Today · 8 bays</button>
+          <button data-v="far4" aria-pressed="true">Far side · 4 bays</button>
+        </div>
+        <p class="note" id="note-layout"></p>
+      </div>
+      <div class="control">
+        <span class="k">Vehicle</span>
+        <div class="seg" id="seg-truck" role="group" aria-label="Vehicle">
+          <button data-v="current" aria-pressed="false">Today</button>
+          <button data-v="rigid" aria-pressed="false">Rigid</button>
+          <button data-v="semi" aria-pressed="true">Semi</button>
+        </div>
+        <p class="note" id="note-truck"></p>
+      </div>
+      <div class="control">
+        <span class="k">Scenery</span>
+        <div class="seg" id="seg-scene" role="group" aria-label="Scenery">
+          <button data-v="current" aria-pressed="false">Today</button>
+          <button data-v="depot" aria-pressed="true">Depot</button>
+          <button data-v="dusk" aria-pressed="false">Dusk</button>
+        </div>
+        <p class="note" id="note-scene"></p>
+      </div>
+      <div class="control">
+        <span class="k">Playback</span>
+        <div class="seg" id="seg-play" role="group" aria-label="Playback">
+          <button data-v="run" aria-pressed="true">Run</button>
+          <button data-v="hold" aria-pressed="false">Hold</button>
+          <button data-v="reset">Reset view</button>
+        </div>
+        <p class="note">Overlay boxes are drawn from the same projection the app uses — <b>green bay quads, amber
+          vehicle box</b> — so framing can be judged with the detections on.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="specs">
+    <div class="spec">
+      <h2>Four bays, far side <span class="tag">layout.ts</span></h2>
+      <p>Drop the near-side rank entirely rather than halving both sides. The near rank is the one the camera looks
+        over the top of; losing it opens the foreground and lets the lane read as a lane.</p>
+      <ul>
+        <li><code>BAYS_PER_SIDE</code> becomes a single <code>BAY_COUNT = 4</code>; <code>baySlots()</code> emits north only.</li>
+        <li>Bays widen to <code>3.4</code> and deepen to fit the vehicle (<code>7.5</code> rigid / <code>16</code> semi) so trucks stop overhanging the paint.</li>
+        <li>The lane shifts south so the four bays sit centre-frame at the current camera pitch.</li>
+        <li><code>public/bays.json</code> is regenerated — 4 rects, all <code>side: "north"</code>; the panel then reads “4 monitored”.</li>
+      </ul>
+    </div>
+    <div class="spec">
+      <h2>A vehicle that reads as a truck <span class="tag">truck.ts</span></h2>
+      <p>Today’s truck is three boxes and six wheels. At this camera distance the silhouette is what sells it, so the
+        detail budget goes into the profile: cab break, deck line, wheel spacing.</p>
+      <ul>
+        <li><b>Rigid</b> — day cab, roof deflector, box body with ribs, chassis rails, bumper, mirrors, mudflaps, lit markers.</li>
+        <li><b>Semi</b> — tractor plus a 13.6 m trailer on a fifth wheel, landing legs, tandem bogie, tail doors and lamps.</li>
+        <li>Livery band + roof number panel per <code>colorIndex</code>, so trucks stay tellable apart in the overlay.</li>
+        <li>Wheels get a hub face; tyres darken from the body so they don’t merge into the tarmac.</li>
+      </ul>
+    </div>
+    <div class="spec">
+      <h2>Scenery with a horizon <span class="tag">bays.ts · world.ts</span></h2>
+      <p>The current lot is a green plane meeting a flat blue band. The depot pass gives the shot a back wall, a
+        skyline and something to cast shadows across the tarmac.</p>
+      <ul>
+        <li>Warehouse behind the far bays: dock doors, bumpers, canopy, roof plant — the reason the bays exist.</li>
+        <li>Kerb, hatched lane edges, painted bay numbers, a hedge line and mast lights along the yard boundary.</li>
+        <li>Gradient sky dome + fog tuned to the horizon, distant treeline and hills instead of a hard edge.</li>
+        <li><b>Dusk</b> keeps the same geometry on a warmer key light with lit masts — a second look for the same build.</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="ledger scroll-x">
+    <table>
+      <thead>
+        <tr><th>File</th><th>Change</th><th class="num">Risk</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>scene/layout.ts</td><td>Single-side bay list, wider/deeper bays, lane offset. Pure geometry — covered by <code>bay-defs.test.ts</code> neighbours.</td><td class="num">Low</td></tr>
+        <tr><td>scene/truck.ts</td><td>New builder with <code>style</code> parameter; <code>TRUCK_DIMENSIONS</code> grows, which feeds the parking tween.</td><td class="num">Med</td></tr>
+        <tr><td>scene/truck-actor.ts</td><td>Longer tween + reverse-in for the semi so the trailer lands square in the bay.</td><td class="num">Med</td></tr>
+        <tr><td>scene/bays.ts</td><td>Scenery group: warehouse, fence, masts, treeline, painted numbers.</td><td class="num">Low</td></tr>
+        <tr><td>scene/world.ts</td><td>Sky dome, fog range, key/fill balance, camera framing for four bays.</td><td class="num">Low</td></tr>
+        <tr><td>public/bays.json</td><td>Regenerated from the new projection — 4 rects. Stale rects silently mis-score occupancy, so this ships in the same commit.</td><td class="num">High</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>Live mockup — geometry is the proposal, not the shipped code. Detection boxes are projected locally; no
+    inference is running.</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var T = window.THREE;
+
+  // ---------------------------------------------------------------- options
+  // Approved combination (far-side 4 bays + rigid + depot) is the default.
+  // Query overrides drive deterministic reference captures: ?bare&overlay=0&view=truck&fill=4&play=0
+  var Q = new URLSearchParams(location.search);
+  var opt = {
+    layout: Q.get("layout") || "far4",
+    truck: Q.get("truck") || "rigid",
+    scene: Q.get("scene") || "depot",
+    play: Q.get("play") !== "0"
+  };
+  var SHOW_OVERLAY = Q.get("overlay") !== "0";
+  var VIEW = Q.get("view") || "hero";
+  var FILL = Q.has("fill") ? parseInt(Q.get("fill"), 10) : 2;
+
+  var NOTES = {
+    layout: {
+      current: "Eight bays, both sides. The near rank sits between the camera and the lane, so its boxes stack over the far ones.",
+      far4: "Four bays on the far side only. Clean foreground, all four rects the same shape class, lane reads left to right."
+    },
+    truck: {
+      current: "Shipped model: chassis box, cab box, windshield slab, six wheels. Overhangs its bay by ~1 m.",
+      rigid: "12 t box truck, 7.2 m. Fits a 7.5 m bay with paint to spare — the workhorse silhouette.",
+      semi: "Tractor + 13.6 m trailer. Needs deep bays and a reverse-in manoeuvre, but it is what a real yard shows."
+    },
+    scene: {
+      current: "Grass plane, asphalt pad, dashed centreline, flat blue background. Nothing at the horizon.",
+      depot: "Warehouse dock wall, kerbs, hedge, mast lights, treeline and a gradient sky under midday key light.",
+      dusk: "Same yard at low sun: warm key, long shadows, mast heads lit, cooler fill from the sky dome."
+    }
+  };
+
+  // ------------------------------------------------------------- dimensions
+  var LANE_WIDTH = 8;
+  var LANE_LENGTH = 140;
+
+  function layoutSpec() {
+    var truckLen = opt.truck === "semi" ? 16.2 : opt.truck === "rigid" ? 7.2 : 4.6;
+    if (opt.layout === "current") {
+      return {
+        sides: ["north", "south"], count: 4, width: 3.2, gap: 1.4, depth: 3.6,
+        laneZ: 0, truckLen: truckLen
+      };
+    }
+    return {
+      sides: ["north"], count: 4, width: 3.4, gap: 1.2,
+      depth: opt.truck === "semi" ? 16.8 : opt.truck === "rigid" ? 8.4 : 5.6,
+      laneZ: 0, truckLen: truckLen
+    };
+  }
+
+  function baySlots(spec) {
+    var slots = [], pitch = spec.width + spec.gap, id = 0;
+    for (var s = 0; s < spec.sides.length; s++) {
+      var side = spec.sides[s];
+      var z = (side === "north" ? -1 : 1) * (LANE_WIDTH / 2 + spec.depth / 2);
+      for (var i = 0; i < spec.count; i++) {
+        var x = (i - (spec.count - 1) / 2) * pitch;
+        slots.push({ id: id++, side: side, x: x, z: z, depth: spec.depth, width: spec.width });
+      }
+    }
+    return slots;
+  }
+
+  // ------------------------------------------------------------------ setup
+  var glCanvas = document.getElementById("gl");
+  var ovCanvas = document.getElementById("ov");
+  var viewport = document.getElementById("viewport");
+  var ovCtx = ovCanvas.getContext("2d");
+
+  var renderer = new T.WebGLRenderer({ canvas: glCanvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = T.PCFSoftShadowMap;
+
+  var scene = new T.Scene();
+  var camera = new T.PerspectiveCamera(55, 16 / 9, 0.5, 700);
+
+  var worldGroup = new T.Group();      // ground, paint, scenery
+  var truckGroup = new T.Group();      // actors
+  scene.add(worldGroup, truckGroup);
+
+  var lights = {};
+  var sky = null;
+
+  // orbit state (spherical around target)
+  var view = { theta: 0, phi: 0, radius: 0, target: new T.Vector3() };
+  var viewDefault = null;
+
+  function frameCamera() {
+    // Approved framing: head-on to the dock wall, ~23 deg above the tarmac.
+    var deep = opt.layout === "far4" && opt.truck === "semi";
+    var wide = opt.layout === "far4";
+    viewDefault = wide
+      ? { theta: 0.05, phi: 0.40, radius: deep ? 52 : 31, target: new T.Vector3(0, 2.0, deep ? -12 : -7) }
+      : { theta: -0.62, phi: 0.68, radius: 44, target: new T.Vector3(0, 1.2, -2) };
+    if (VIEW === "truck") {
+      viewDefault = { theta: 0.85, phi: 0.20, radius: 19, target: new T.Vector3(-2.0, 1.9, -7.5) };
+    } else if (VIEW === "bays") {
+      viewDefault = { theta: 0.02, phi: 0.66, radius: 34, target: new T.Vector3(0, 0, -8) };
+    } else if (VIEW === "yard") {
+      viewDefault = { theta: -0.42, phi: 0.30, radius: 78, target: new T.Vector3(0, 3.5, -12) };
+    }
+    resetView();
+  }
+  function resetView() {
+    view.theta = viewDefault.theta; view.phi = viewDefault.phi;
+    view.radius = viewDefault.radius; view.target.copy(viewDefault.target);
+    applyCamera();
+  }
+  function applyCamera() {
+    var p = view.phi, r = view.radius, t = view.theta;
+    camera.position.set(
+      view.target.x + r * Math.cos(p) * Math.sin(t),
+      view.target.y + r * Math.sin(p),
+      view.target.z + r * Math.cos(p) * Math.cos(t)
+    );
+    camera.lookAt(view.target);
+  }
+
+  // ------------------------------------------------------------- materials
+  function mat(color, rough, metal) {
+    return new T.MeshStandardMaterial({ color: color, roughness: rough === undefined ? 0.85 : rough, metalness: metal || 0 });
+  }
+  function box(w, h, d, material, x, y, z) {
+    var m = new T.Mesh(new T.BoxGeometry(w, h, d), material);
+    m.position.set(x, y, z);
+    m.castShadow = true; m.receiveShadow = true;
+    return m;
+  }
+  function flat(w, d, material, x, y, z) {
+    var m = new T.Mesh(new T.PlaneGeometry(w, d), material);
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(x, y, z);
+    m.receiveShadow = true;
+    return m;
+  }
+  function disposeGroup(g) {
+    g.traverse(function (o) {
+      if (o.isMesh) {
+        o.geometry.dispose();
+        if (Array.isArray(o.material)) o.material.forEach(function (m) { m.dispose(); });
+        else if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+      }
+    });
+    while (g.children.length) g.remove(g.children[0]);
+  }
+
+  // deterministic pseudo-random so the yard is identical every rebuild
+  function rnd(i) { var x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+
+  // ------------------------------------------------------------------- sky
+  var SKY_VERT = "varying vec3 vPos; void main(){ vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }";
+  var SKY_FRAG = [
+    "varying vec3 vPos;",
+    "uniform vec3 top; uniform vec3 horizon; uniform vec3 lowc;",
+    "void main(){",
+    "  float h = normalize(vPos).y;",
+    "  vec3 c = mix(horizon, top, clamp(h*1.6, 0.0, 1.0));",
+    "  c = mix(lowc, c, clamp((h+0.12)*6.0, 0.0, 1.0));",
+    "  gl_FragColor = vec4(c, 1.0);",
+    "}"
+  ].join("\n");
+
+  function buildSky(top, horizon, low) {
+    var m = new T.Mesh(
+      new T.SphereGeometry(400, 32, 20),
+      new T.ShaderMaterial({
+        side: T.BackSide, depthWrite: false,
+        uniforms: { top: { value: new T.Color(top) }, horizon: { value: new T.Color(horizon) }, lowc: { value: new T.Color(low) } },
+        vertexShader: SKY_VERT, fragmentShader: SKY_FRAG
+      })
+    );
+    return m;
+  }
+
+  // painted bay number on the tarmac
+  function bayNumberTexture(n) {
+    var c = document.createElement("canvas");
+    c.width = 128; c.height = 128;
+    var g = c.getContext("2d");
+    g.clearRect(0, 0, 128, 128);
+    g.fillStyle = "rgba(226,222,208,0.92)";
+    g.font = "700 88px 'IBM Plex Mono', monospace";
+    g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText(String(n).padStart(2, "0"), 64, 68);
+    var tex = new T.CanvasTexture(c);
+    tex.anisotropy = 4;
+    return tex;
+  }
+
+  function fenceTexture() {
+    var c = document.createElement("canvas");
+    c.width = 64; c.height = 64;
+    var g = c.getContext("2d");
+    g.strokeStyle = "#ffffff"; g.lineWidth = 4;
+    g.beginPath();
+    for (var i = -64; i < 128; i += 16) {
+      g.moveTo(i, 0); g.lineTo(i + 64, 64);
+      g.moveTo(i, 64); g.lineTo(i + 64, 0);
+    }
+    g.stroke();
+    var tex = new T.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = T.RepeatWrapping;
+    return tex;
+  }
+
+  // ------------------------------------------------------------ world build
+  function buildWorld() {
+    disposeGroup(worldGroup);
+    if (sky) { scene.remove(sky); sky.geometry.dispose(); sky.material.dispose(); sky = null; }
+    Object.keys(lights).forEach(function (k) { scene.remove(lights[k]); });
+    lights = {};
+
+    var spec = layoutSpec();
+    var slots = baySlots(spec);
+    var dusk = opt.scene === "dusk";
+    var plain = opt.scene === "current";
+
+    // --- sky + fog ---------------------------------------------------------
+    if (plain) {
+      scene.background = new T.Color(0x8ec5e8);
+      scene.fog = new T.Fog(0x8ec5e8, 110, 200);
+    } else if (dusk) {
+      sky = buildSky(0x1d3350, 0xe0894b, 0x2a2b38);
+      scene.background = null;
+      scene.fog = new T.Fog(0xb1704a, 70, 230);
+    } else {
+      sky = buildSky(0x4f8fd0, 0xcfe4f2, 0x9fb6a8);
+      scene.background = null;
+      scene.fog = new T.Fog(0xcfe4f2, 90, 260);
+    }
+    if (sky) scene.add(sky);
+
+    // --- lights ------------------------------------------------------------
+    var hemi = new T.HemisphereLight(
+      dusk ? 0x6f86b8 : 0xcfe8ff,
+      plain ? 0x51603f : (dusk ? 0x2c2a2a : 0x5c6a4a),
+      dusk ? 0.55 : (plain ? 0.9 : 0.75)
+    );
+    scene.add(hemi); lights.hemi = hemi;
+
+    var sun = new T.DirectionalLight(dusk ? 0xffb070 : 0xfff4e0, dusk ? 1.9 : 2.1);
+    sun.position.set(dusk ? -70 : 42, dusk ? 16 : 58, dusk ? 30 : 26);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    var sc = sun.shadow.camera;
+    sc.left = -70; sc.right = 70; sc.top = 60; sc.bottom = -60; sc.far = 220;
+    sun.shadow.bias = -0.0006;
+    scene.add(sun); lights.sun = sun;
+
+    if (!plain) {
+      var fill = new T.DirectionalLight(dusk ? 0x4a6fa8 : 0xbcd6ff, dusk ? 0.5 : 0.35);
+      fill.position.set(-30, 24, -40);
+      scene.add(fill); lights.fill = fill;
+    }
+
+    // --- ground ------------------------------------------------------------
+    var grass = mat(plain ? 0x3f4a3c : (dusk ? 0x3a4232 : 0x536b3c), 1);
+    worldGroup.add(flat(600, 600, grass, 0, 0, 0));
+
+    if (!plain) {
+      // mown bands for a little variation under the low sun
+      var band = mat(dusk ? 0x424b38 : 0x5c7642, 1);
+      for (var b = 0; b < 7; b++) {
+        var bm = flat(600, 7, band, 0, 0.004, -70 - b * 15);
+        worldGroup.add(bm);
+      }
+    }
+
+    // --- tarmac pad --------------------------------------------------------
+    var north = spec.sides.indexOf("north") >= 0;
+    var south = spec.sides.indexOf("south") >= 0;
+    var padNorth = -(LANE_WIDTH / 2 + (north ? spec.depth + 1.6 : 1.2));
+    var padSouth = LANE_WIDTH / 2 + (south ? spec.depth + 1.6 : 7);
+    var padDepth = padSouth - padNorth;
+    var padZ = (padNorth + padSouth) / 2;
+    worldGroup.add(flat(LANE_LENGTH, padDepth, mat(plain ? 0x3a3d42 : (dusk ? 0x2b2c30 : 0x393c41), 0.96), 0, 0.01, padZ));
+
+    if (!plain) {
+      // kerb along the open side of the pad
+      var kerb = box(LANE_LENGTH, 0.34, 0.5, mat(dusk ? 0x8d8880 : 0xb9b4a8, 0.9), 0, 0.17, padSouth + 0.25);
+      worldGroup.add(kerb);
+    }
+
+    // --- paint -------------------------------------------------------------
+    var paint = mat(dusk ? 0xbcb6a6 : 0xe4dfcf, 0.9);
+    var yellow = mat(dusk ? 0xc7a63c : 0xf2e14c, 0.85);
+
+    // centreline dashes
+    var dashLen = 2.4;
+    for (var d = -LANE_LENGTH / 2; d < LANE_LENGTH / 2; d += dashLen * 2.2) {
+      worldGroup.add(flat(dashLen, 0.22, yellow, d + dashLen / 2, 0.02, spec.laneZ));
+    }
+    if (!plain) {
+      // solid lane edges
+      worldGroup.add(flat(LANE_LENGTH, 0.16, paint, 0, 0.02, spec.laneZ - LANE_WIDTH / 2));
+      worldGroup.add(flat(LANE_LENGTH, 0.16, paint, 0, 0.02, spec.laneZ + LANE_WIDTH / 2));
+    }
+
+    // bay markings
+    for (var i = 0; i < slots.length; i++) {
+      var s = slots[i];
+      for (var k = 0; k < 2; k++) {
+        var dx = (k === 0 ? -1 : 1) * s.width / 2;
+        worldGroup.add(flat(0.18, s.depth, paint, s.x + dx, 0.02, s.z));
+      }
+      var backZ = s.z + (s.side === "north" ? -1 : 1) * s.depth / 2;
+      worldGroup.add(flat(s.width + spec.gap * 0.5, 0.18, paint, s.x, 0.02, backZ));
+
+      if (!plain) {
+        var numTex = bayNumberTexture(s.id + 1);
+        var num = new T.Mesh(
+          new T.PlaneGeometry(1.5, 1.5),
+          new T.MeshBasicMaterial({ map: numTex, transparent: true, depthWrite: false })
+        );
+        num.rotation.x = -Math.PI / 2;
+        num.rotation.z = s.side === "north" ? Math.PI : 0;
+        num.position.set(s.x, 0.022, s.z + (s.side === "north" ? 1 : -1) * (s.depth / 2 - 1.2));
+        worldGroup.add(num);
+      }
+    }
+
+    if (!plain) buildScenery(spec, slots, dusk, padNorth, padSouth);
+
+    frameCamera();
+    return slots;
+  }
+
+  // --------------------------------------------------------------- scenery
+  function buildScenery(spec, slots, dusk, padNorth, padSouth) {
+    var wallZ = padNorth - 1.2;
+
+    // ---- warehouse --------------------------------------------------------
+    var shellMat = mat(dusk ? 0x6c6f74 : 0xb9c0c4, 0.85);
+    var trimMat = mat(dusk ? 0x2f4a58 : 0x2f6b82, 0.7);
+    var doorMat = mat(dusk ? 0x24272b : 0x33373c, 0.8);
+
+    var wh = new T.Group();
+    var whW = 62, whH = 11, whD = 26;
+    wh.add(box(whW, whH, whD, shellMat, 0, whH / 2, wallZ - whD / 2));
+    // roof band + parapet
+    wh.add(box(whW + 0.8, 0.9, whD + 0.8, trimMat, 0, whH + 0.3, wallZ - whD / 2));
+    // canopy over the dock face
+    var canopy = box(whW, 0.5, 3.4, trimMat, 0, 5.6, wallZ + 1.4);
+    wh.add(canopy);
+    // dock doors aligned with the bays
+    for (var i = 0; i < slots.length; i++) {
+      var s = slots[i];
+      if (s.side !== "north") continue;
+      wh.add(box(3.1, 4.2, 0.3, doorMat, s.x, 2.1, wallZ + 0.05));
+      // dock bumpers
+      wh.add(box(0.4, 0.5, 0.4, mat(0x1b1d20, 0.95), s.x - 1.8, 1.0, wallZ + 0.25));
+      wh.add(box(0.4, 0.5, 0.4, mat(0x1b1d20, 0.95), s.x + 1.8, 1.0, wallZ + 0.25));
+    }
+    // roof plant
+    wh.add(box(4, 1.4, 3, mat(dusk ? 0x585c60 : 0x9aa2a6, 0.9), -16, whH + 1.2, wallZ - 12));
+    wh.add(box(3, 1.1, 3, mat(dusk ? 0x585c60 : 0x9aa2a6, 0.9), 12, whH + 1.05, wallZ - 16));
+    worldGroup.add(wh);
+
+    // ---- mast lights ------------------------------------------------------
+    var mastMat = mat(dusk ? 0x3c4045 : 0x6d7479, 0.7, 0.3);
+    var headMat = dusk
+      ? new T.MeshStandardMaterial({ color: 0xffe6b0, emissive: 0xffcc70, emissiveIntensity: 1.6, roughness: 0.4 })
+      : mat(0xd8dcdf, 0.6);
+    for (var m = -1; m <= 1; m += 2) {
+      for (var j = 0; j < 3; j++) {
+        var mx = m * (21 + j * 16);
+        var mast = new T.Group();
+        var pole = new T.Mesh(new T.CylinderGeometry(0.16, 0.24, 12, 8), mastMat);
+        pole.position.y = 6; pole.castShadow = true;
+        mast.add(pole);
+        mast.add(box(2.4, 0.35, 0.9, headMat, 0, 12.1, 0.5));
+        mast.position.set(mx, 0, padSouth + 4.5);
+        worldGroup.add(mast);
+        if (dusk) {
+          var glow = new T.PointLight(0xffc880, 34, 40, 2);
+          glow.position.set(mx, 11.6, padSouth + 4.3);
+          worldGroup.add(glow);
+        }
+      }
+    }
+
+    // ---- fence + hedge along the open boundary ---------------------------
+    var fTex = fenceTexture();
+    fTex.repeat.set(46, 1.4);
+    var fenceMat = new T.MeshBasicMaterial({
+      map: fTex, alphaMap: fTex, transparent: true, opacity: dusk ? 0.28 : 0.34,
+      color: dusk ? 0x8d949a : 0xc8ced2, side: T.DoubleSide, depthWrite: false
+    });
+    var fence = new T.Mesh(new T.PlaneGeometry(160, 2.6), fenceMat);
+    fence.position.set(0, 1.3, padSouth + 7);
+    worldGroup.add(fence);
+    var postMat = mat(dusk ? 0x3a3f43 : 0x767c80, 0.8);
+    for (var p = -80; p <= 80; p += 8) {
+      var post = new T.Mesh(new T.CylinderGeometry(0.09, 0.09, 2.7, 6), postMat);
+      post.position.set(p, 1.35, padSouth + 7);
+      worldGroup.add(post);
+    }
+
+    // ---- treeline + hills -------------------------------------------------
+    var trunkMat = mat(dusk ? 0x2c2419 : 0x453423, 1);
+    var leafA = mat(dusk ? 0x24371f : 0x3d6030, 1);
+    var leafB = mat(dusk ? 0x2b3d22 : 0x4a7038, 1);
+    for (var t = 0; t < 26; t++) {
+      var r1 = rnd(t), r2 = rnd(t + 40), r3 = rnd(t + 80);
+      var tx = -110 + t * 8.6 + r1 * 5;
+      var tz = wallZ - 34 - r2 * 26;
+      var hgt = 6 + r3 * 5;
+      var tree = new T.Group();
+      var trunk = new T.Mesh(new T.CylinderGeometry(0.32, 0.42, hgt * 0.45, 6), trunkMat);
+      trunk.position.y = hgt * 0.22;
+      tree.add(trunk);
+      var crown = new T.Mesh(new T.ConeGeometry(2.2 + r1 * 1.4, hgt * 0.85, 7), r2 > 0.5 ? leafA : leafB);
+      crown.position.y = hgt * 0.62;
+      crown.castShadow = true;
+      tree.add(crown);
+      tree.position.set(tx, 0, tz);
+      worldGroup.add(tree);
+    }
+    // hedge strip behind the fence
+    for (var h = 0; h < 30; h++) {
+      var hx = -100 + h * 7 + rnd(h + 5) * 2;
+      worldGroup.add(box(6.4, 1.8 + rnd(h) * 0.5, 1.9, h % 2 ? leafA : leafB, hx, 0.9, padSouth + 10));
+    }
+    // distant hills
+    var hillMat = mat(dusk ? 0x2e3a4a : 0x7f9a90, 1);
+    for (var q = 0; q < 5; q++) {
+      var hill = new T.Mesh(new T.SphereGeometry(46 + q * 12, 14, 8), hillMat);
+      hill.scale.set(1.6, 0.24 + rnd(q) * 0.12, 1);
+      hill.position.set(-140 + q * 74, -4, wallZ - 190 - rnd(q + 9) * 40);
+      worldGroup.add(hill);
+    }
+
+    // ---- yard clutter -----------------------------------------------------
+    var conMats = [mat(0xa14a3a, 0.9), mat(0x2f6f8f, 0.9), mat(0x8a8f55, 0.9)];
+    var stackX = -(spec.width + spec.gap) * 2 - 14;
+    for (var c = 0; c < 5; c++) {
+      var cm = conMats[c % 3];
+      var cx = stackX - (c % 2) * 0.4;
+      var cy = 1.35 + Math.floor(c / 2) * 2.7;
+      var cz = wallZ + 3 + (c % 2) * 2.7;
+      worldGroup.add(box(12.2, 2.6, 2.44, cm, cx, cy, cz));
+    }
+    // pallet stacks by the dock
+    var palletMat = mat(dusk ? 0x715a3a : 0xa2814f, 1);
+    for (var pw = 0; pw < 4; pw++) {
+      worldGroup.add(box(1.2, 0.9, 1.0, palletMat, 14 + pw * 1.5, 0.45, wallZ + 1.4));
+    }
+    // apron furniture: gives the foreground depth instead of bare tarmac
+    var dropMat = mat(dusk ? 0xb4b7b2 : 0xe4e6e2, 0.75);
+    var dropped = new T.Group();
+    dropped.add(box(11.0, 2.8, 2.5, dropMat, 0, 3.05, 0));
+    dropped.add(box(11.0, 0.5, 2.56, mat(0x2f6f8f, 0.8), 0, 1.9, 0));
+    [-1, 1].forEach(function (sg) {
+      dropped.add(box(0.16, 1.1, 0.16, mat(0x24262a, 0.8), 4.0, 1.1, sg * 0.9));
+    });
+    wheelSet(dropped, [-3.6, -2.2], 1.1, 0.55, 0.44);
+    dropped.position.set(-19, 0, padSouth - 4.2);
+    dropped.rotation.y = 0.12;
+    worldGroup.add(dropped);
+
+    // traffic cones on the lane edge
+    var coneMat = mat(0xd4622a, 0.9);
+    for (var cc = 0; cc < 3; cc++) {
+      var cone = new T.Mesh(new T.ConeGeometry(0.34, 0.9, 8), coneMat);
+      cone.position.set(-9 + cc * 2.2, 0.45, padSouth - 1.6);
+      cone.castShadow = true;
+      worldGroup.add(cone);
+    }
+  }
+
+  // ------------------------------------------------------------- vehicles
+  var LIVERY = [0xb43a3a, 0x2f6fb4, 0xd18f2f, 0x3f8f5f, 0x6a5aa8];
+
+  function buildTruck(style, colorIndex) {
+    if (style === "current") return buildLegacyTruck(colorIndex);
+    if (style === "semi") return buildSemi(colorIndex);
+    return buildRigid(colorIndex);
+  }
+
+  function buildLegacyTruck(ci) {
+    var g = new T.Group();
+    var L = 4.6, W = 2.0, R = 0.42;
+    var body = mat(LIVERY[ci % LIVERY.length], 0.6, 0.1);
+    var dark = mat(0x1c1c20, 0.9);
+    g.add(box(L * 0.62, 0.9, W, body, -L * 0.16, 1.05, 0));
+    g.add(box(L * 0.3, 1.25, W, body, L * 0.33, 1.15, 0));
+    g.add(box(0.12, 0.55, W * 0.82, mat(0x9fd4e8, 0.2, 0.4), L * 0.465, 1.35, 0));
+    var wg = new T.CylinderGeometry(R, R, 0.35, 16); wg.rotateX(Math.PI / 2);
+    [L * 0.33, -L * 0.28, -L * 0.42].forEach(function (wx) {
+      [-W / 2, W / 2].forEach(function (wz) {
+        var w = new T.Mesh(wg, dark);
+        w.position.set(wx, R, wz); w.castShadow = true;
+        g.add(w);
+      });
+    });
+    g.userData.length = L;
+    return g;
+  }
+
+  function wheelSet(group, xs, halfW, radius, width) {
+    var tyre = mat(0x15171a, 0.95);
+    var hub = mat(0x9aa0a6, 0.5, 0.6);
+    var tg = new T.CylinderGeometry(radius, radius, width, 18); tg.rotateX(Math.PI / 2);
+    var hg = new T.CylinderGeometry(radius * 0.48, radius * 0.48, width + 0.06, 12); hg.rotateX(Math.PI / 2);
+    xs.forEach(function (wx) {
+      [-halfW, halfW].forEach(function (wz) {
+        var w = new T.Mesh(tg, tyre);
+        w.position.set(wx, radius, wz); w.castShadow = true;
+        group.add(w);
+        var h = new T.Mesh(hg, hub);
+        h.position.set(wx, radius, wz + (wz > 0 ? 0.03 : -0.03));
+        group.add(h);
+      });
+    });
+  }
+
+  function cabAssembly(ci, opts) {
+    // Shared tractor/day-cab: nose at local +X, returns a group centred on x=0.
+    var g = new T.Group();
+    var body = mat(LIVERY[ci % LIVERY.length], 0.45, 0.25);
+    var glass = new T.MeshStandardMaterial({ color: 0x1e2f38, roughness: 0.12, metalness: 0.75 });
+    var dark = mat(0x24262a, 0.8);
+    var chrome = mat(0xb6bcc2, 0.35, 0.85);
+    var lamp = new T.MeshStandardMaterial({ color: 0xfff2cf, emissive: 0xffe8b0, emissiveIntensity: 0.8, roughness: 0.3 });
+    var amber = new T.MeshStandardMaterial({ color: 0xffb347, emissive: 0xff9b1f, emissiveIntensity: 0.7, roughness: 0.4 });
+    var W = 2.5;
+
+    var cabLen = opts.sleeper ? 3.0 : 2.1;
+    var cab = box(cabLen, 2.35, W, body, 0, 2.05, 0);
+    g.add(cab);
+    // windscreen + side glass
+    g.add(box(0.1, 0.95, W * 0.88, glass, cabLen / 2 + 0.02, 2.55, 0));
+    g.add(box(cabLen * 0.42, 0.8, W + 0.04, glass, cabLen * 0.12, 2.5, 0));
+    // roof deflector
+    var defl = box(cabLen * 0.72, 0.62, W * 0.92, body, -cabLen * 0.06, 3.42, 0);
+    defl.rotation.z = -0.09;
+    g.add(defl);
+    // marker lamps
+    for (var mk = -1; mk <= 1; mk++) g.add(box(0.16, 0.1, 0.16, amber, cabLen * 0.2, 3.75, mk * 0.8));
+    // grille, bumper, lights
+    g.add(box(0.14, 0.75, W * 0.8, dark, cabLen / 2 + 0.03, 1.55, 0));
+    g.add(box(0.34, 0.42, W + 0.08, chrome, cabLen / 2 + 0.12, 0.95, 0));
+    g.add(box(0.12, 0.26, 0.5, lamp, cabLen / 2 + 0.2, 1.05, -0.92));
+    g.add(box(0.12, 0.26, 0.5, lamp, cabLen / 2 + 0.2, 1.05, 0.92));
+    // mirrors
+    [-1, 1].forEach(function (sgn) {
+      g.add(box(0.08, 0.62, 0.16, dark, cabLen / 2 - 0.15, 2.6, sgn * (W / 2 + 0.28)));
+      g.add(box(0.5, 0.06, 0.06, dark, cabLen / 2 - 0.35, 2.85, sgn * (W / 2 + 0.16)));
+    });
+    // exhaust stack
+    if (opts.stack) {
+      var st = new T.Mesh(new T.CylinderGeometry(0.11, 0.11, 2.6, 10), chrome);
+      st.position.set(-cabLen / 2 + 0.1, 2.4, -(W / 2 - 0.2));
+      st.castShadow = true;
+      g.add(st);
+    }
+    // fuel tank + steps
+    g.add(new T.Mesh(new T.CylinderGeometry(0.42, 0.42, 1.5, 12), chrome).translateY(0));
+    var tank = g.children[g.children.length - 1];
+    tank.rotation.z = Math.PI / 2;
+    tank.position.set(-cabLen * 0.2, 0.85, -(W / 2 - 0.05));
+    return { group: g, width: W, cabLen: cabLen };
+  }
+
+  function buildRigid(ci) {
+    var g = new T.Group();
+    var body = mat(LIVERY[ci % LIVERY.length], 0.45, 0.25);
+    var panel = mat(0xe8e9e6, 0.7);
+    var dark = mat(0x24262a, 0.8);
+    var L = 7.2, W = 2.5;
+
+    // chassis rails
+    [-0.75, 0.75].forEach(function (z) {
+      g.add(box(L * 0.9, 0.2, 0.14, dark, -0.4, 0.72, z));
+    });
+
+    var cab = cabAssembly(ci, { sleeper: false, stack: false });
+    cab.group.position.x = L / 2 - 1.05;
+    g.add(cab.group);
+
+    // box body with ribs and a livery band
+    var boxLen = 4.3;
+    var boxX = -(L / 2) + boxLen / 2 + 0.25;
+    g.add(box(boxLen, 2.7, W, panel, boxX, 2.25, 0));
+    for (var r = 0; r < 6; r++) {
+      var rx = boxX - boxLen / 2 + 0.5 + r * (boxLen - 1) / 5;
+      g.add(box(0.09, 2.6, W + 0.04, mat(0xd2d5d1, 0.75), rx, 2.25, 0));
+    }
+    g.add(box(boxLen, 0.42, W + 0.06, body, boxX, 1.28, 0));
+    // rear doors + lamps
+    g.add(box(0.14, 2.5, W - 0.1, mat(0xcfd2ce, 0.7), boxX - boxLen / 2 - 0.05, 2.25, 0));
+    var red = new T.MeshStandardMaterial({ color: 0xd63b2a, emissive: 0x8e1c12, emissiveIntensity: 0.6, roughness: 0.4 });
+    [-1, 1].forEach(function (s) { g.add(box(0.1, 0.3, 0.45, red, boxX - boxLen / 2 - 0.1, 1.05, s * 0.85)); });
+    // mudflaps
+    [-1, 1].forEach(function (s) { g.add(box(0.06, 0.5, 0.6, mat(0x1a1c1f, 0.95), -L / 2 + 0.35, 0.34, s * 0.95)); });
+
+    wheelSet(g, [L / 2 - 1.05, -1.55, -2.75], W / 2 - 0.12, 0.55, 0.38);
+    g.userData.length = L;
+    return g;
+  }
+
+  function buildSemi(ci) {
+    var g = new T.Group();
+    var body = mat(LIVERY[ci % LIVERY.length], 0.45, 0.25);
+    var panel = mat(0xeceee9, 0.7);
+    var dark = mat(0x24262a, 0.8);
+    var chrome = mat(0xb6bcc2, 0.35, 0.85);
+    var W = 2.5;
+    var totalLen = 16.2;
+    var nose = totalLen / 2;
+
+    var cab = cabAssembly(ci, { sleeper: true, stack: true });
+    cab.group.position.x = nose - cab.cabLen / 2 - 0.15;
+    g.add(cab.group);
+
+    // tractor chassis + fifth wheel
+    g.add(box(5.4, 0.28, 1.6, dark, nose - 3.4, 0.82, 0));
+    var fifth = box(1.5, 0.18, 1.7, chrome, nose - 4.6, 1.0, 0);
+    g.add(fifth);
+
+    // trailer: 13.6 m box riding on the fifth wheel
+    var tLen = 11.6;
+    var tX = nose - 4.6 - tLen / 2 + 0.9;
+    g.add(box(tLen, 2.9, W, panel, tX, 2.75, 0));
+    // ribs
+    for (var r = 0; r < 9; r++) {
+      var rx = tX - tLen / 2 + 0.7 + r * (tLen - 1.4) / 8;
+      g.add(box(0.08, 2.8, W + 0.04, mat(0xd7dad5, 0.75), rx, 2.75, 0));
+    }
+    // livery band + roof number panel
+    g.add(box(tLen, 0.5, W + 0.06, body, tX, 1.62, 0));
+    g.add(box(2.4, 0.05, 1.6, body, tX, 4.23, 0));
+    // trailer underrun + skirt
+    g.add(box(tLen * 0.72, 0.7, 0.1, mat(0xbfc3be, 0.8), tX, 1.0, -(W / 2 - 0.05)));
+    g.add(box(tLen * 0.72, 0.7, 0.1, mat(0xbfc3be, 0.8), tX, 1.0, W / 2 - 0.05));
+    // landing legs
+    [-1, 1].forEach(function (s) {
+      g.add(box(0.16, 1.0, 0.16, dark, tX + tLen / 2 - 1.6, 0.85, s * 0.9));
+      g.add(box(0.4, 0.12, 0.3, dark, tX + tLen / 2 - 1.6, 0.34, s * 0.9));
+    });
+    // rear doors, lamps, bumper
+    var rearX = tX - tLen / 2;
+    g.add(box(0.16, 2.8, W - 0.08, mat(0xd9dcd7, 0.7), rearX - 0.06, 2.75, 0));
+    g.add(box(0.5, 0.16, W - 0.2, dark, rearX - 0.2, 0.72, 0));
+    var red = new T.MeshStandardMaterial({ color: 0xd63b2a, emissive: 0x8e1c12, emissiveIntensity: 0.7, roughness: 0.4 });
+    [-1, 1].forEach(function (s) { g.add(box(0.12, 0.34, 0.5, red, rearX - 0.14, 1.15, s * 0.9)); });
+    [-1, 1].forEach(function (s) { g.add(box(0.06, 0.55, 0.62, mat(0x1a1c1f, 0.95), rearX + 0.1, 0.36, s * 0.95)); });
+
+    // wheels: steer, drive tandem, trailer tridem
+    wheelSet(g, [nose - 1.3], W / 2 - 0.14, 0.55, 0.4);
+    wheelSet(g, [nose - 5.0, nose - 6.4], W / 2 - 0.12, 0.55, 0.44);
+    wheelSet(g, [rearX + 1.5, rearX + 2.9, rearX + 4.3], W / 2 - 0.12, 0.55, 0.44);
+
+    g.userData.length = totalLen;
+    return g;
+  }
+
+  // ---------------------------------------------------------------- actors
+  var actors = [];
+  var slots = [];
+  var spawnTimer = 0.6;
+  var nextBay = 0;
+
+  function spawnActor() {
+    var free = slots.filter(function (s) {
+      return !actors.some(function (a) { return a.bay.id === s.id && a.phase !== "exit"; });
+    });
+    if (!free.length) return;
+    var bay = free[nextBay % free.length];
+    nextBay = (nextBay + 1) % Math.max(free.length, 1);
+    var ci = bay.id % LIVERY.length;
+    var mesh = buildTruck(opt.truck, ci);
+    var dir = bay.id % 2 === 0 ? 1 : -1;
+    mesh.position.set(-dir * (LANE_LENGTH / 2 - 20), 0, 0);
+    mesh.rotation.y = dir === 1 ? 0 : Math.PI;
+    truckGroup.add(mesh);
+    actors.push({
+      mesh: mesh, bay: bay, dir: dir, phase: "approach", t: 0,
+      travelYaw: dir === 1 ? 0 : Math.PI,
+      parkYaw: bay.side === "north" ? -Math.PI / 2 : Math.PI / 2,
+      conf: 0.9 + (bay.id % 7) * 0.012
+    });
+  }
+
+  function clearActors() {
+    for (var i = 0; i < actors.length; i++) {
+      truckGroup.remove(actors[i].mesh);
+      disposeGroup(actors[i].mesh);
+    }
+    actors.length = 0;
+    spawnTimer = 0.4;
+  }
+
+  var LANE_SPEED = 9, PARK_TIME = 7, TWEEN = 2.6;
+  function ease(t) { return t * t * (3 - 2 * t); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function updateActors(dt) {
+    spawnTimer -= dt;
+    var maxActive = Math.min(slots.length, opt.layout === "far4" ? 3 : 4);
+    if (spawnTimer <= 0 && actors.length < maxActive) { spawnActor(); spawnTimer = 4.2; }
+
+    for (var i = actors.length - 1; i >= 0; i--) {
+      var a = actors[i];
+      a.t += dt;
+      if (a.phase === "approach") {
+        a.mesh.position.x += a.dir * LANE_SPEED * dt;
+        var reached = a.dir === 1 ? a.mesh.position.x >= a.bay.x : a.mesh.position.x <= a.bay.x;
+        if (reached) { a.phase = "parking"; a.t = 0; }
+      } else if (a.phase === "parking") {
+        var e = ease(Math.min(a.t / TWEEN, 1));
+        a.mesh.position.z = a.bay.z * e;
+        a.mesh.position.x = lerp(a.bay.x, a.bay.x, e);
+        a.mesh.rotation.y = lerp(a.travelYaw, a.parkYaw, e);
+        if (a.t >= TWEEN) { a.phase = "parked"; a.t = 0; }
+      } else if (a.phase === "parked") {
+        if (a.t >= PARK_TIME) { a.phase = "leaving"; a.t = 0; }
+      } else if (a.phase === "leaving") {
+        var e2 = ease(Math.min(a.t / TWEEN, 1));
+        a.mesh.position.z = a.bay.z * (1 - e2);
+        a.mesh.rotation.y = lerp(a.parkYaw, a.travelYaw, e2);
+        if (a.t >= TWEEN) { a.phase = "exit"; a.t = 0; }
+      } else {
+        a.mesh.position.x += a.dir * LANE_SPEED * dt;
+        if (Math.abs(a.mesh.position.x) > LANE_LENGTH / 2 - 10) {
+          truckGroup.remove(a.mesh); disposeGroup(a.mesh); actors.splice(i, 1);
+        }
+      }
+    }
+  }
+
+  // --------------------------------------------------------------- overlay
+  var _v = new T.Vector3();
+  var _bb = new T.Box3();
+
+  function project(x, y, z, w, h) {
+    _v.set(x, y, z).project(camera);
+    return { x: (_v.x + 1) / 2 * w, y: (1 - _v.y) / 2 * h, z: _v.z };
+  }
+
+  function drawOverlay(w, h) {
+    ovCtx.clearRect(0, 0, w, h);
+    if (!SHOW_OVERLAY) return;
+    var scale = w / 960;
+    var font = Math.max(9, Math.round(11 * scale));
+
+    // bays
+    for (var i = 0; i < slots.length; i++) {
+      var s = slots[i];
+      var occupied = actors.some(function (a) {
+        return a.bay.id === s.id && (a.phase === "parked" || a.phase === "parking");
+      });
+      var pts = [
+        project(s.x - s.width / 2, 0.05, s.z - s.depth / 2, w, h),
+        project(s.x + s.width / 2, 0.05, s.z - s.depth / 2, w, h),
+        project(s.x + s.width / 2, 0.05, s.z + s.depth / 2, w, h),
+        project(s.x - s.width / 2, 0.05, s.z + s.depth / 2, w, h)
+      ];
+      if (pts.some(function (p) { return p.z > 1; })) continue;
+      ovCtx.beginPath();
+      ovCtx.moveTo(pts[0].x, pts[0].y);
+      for (var k = 1; k < 4; k++) ovCtx.lineTo(pts[k].x, pts[k].y);
+      ovCtx.closePath();
+      ovCtx.strokeStyle = occupied ? "rgba(255,176,74,0.95)" : "rgba(70,224,140,0.95)";
+      ovCtx.lineWidth = Math.max(1, 1.6 * scale);
+      ovCtx.fillStyle = occupied ? "rgba(255,176,74,0.10)" : "rgba(70,224,140,0.08)";
+      ovCtx.fill();
+      ovCtx.stroke();
+
+      // Label sits centred inside the bay mouth: at a head-on camera the quads
+      // are wide and short, so left-anchored labels overrun their neighbours.
+      var label = String(s.id + 1).padStart(2, "0") + " " + (occupied ? "OCC" : "CLEAR");
+      ovCtx.font = "600 " + font + "px 'IBM Plex Mono', monospace";
+      var tw = ovCtx.measureText(label).width;
+      var cx = (pts[2].x + pts[3].x) / 2;
+      var cy = (pts[2].y + pts[3].y) / 2;
+      var bw = tw + 9 * scale, bh = font + 6 * scale;
+      ovCtx.fillStyle = "rgba(8,14,12,0.82)";
+      ovCtx.fillRect(cx - bw / 2, cy - bh - 3 * scale, bw, bh);
+      ovCtx.fillStyle = occupied ? "#ffb04a" : "#46e08c";
+      ovCtx.fillText(label, cx - tw / 2, cy - 7 * scale);
+    }
+
+    // vehicles
+    for (var a = 0; a < actors.length; a++) {
+      var act = actors[a];
+      _bb.setFromObject(act.mesh);
+      var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, ok = true;
+      for (var c = 0; c < 8; c++) {
+        var p = project(
+          c & 1 ? _bb.max.x : _bb.min.x,
+          c & 2 ? _bb.max.y : _bb.min.y,
+          c & 4 ? _bb.max.z : _bb.min.z, w, h
+        );
+        if (p.z > 1) { ok = false; break; }
+        minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+      }
+      if (!ok) continue;
+      if (maxX < 0 || minX > w || maxY < 0 || minY > h) continue;
+      ovCtx.strokeStyle = "rgba(255,164,52,0.95)";
+      ovCtx.lineWidth = Math.max(1.2, 2 * scale);
+      ovCtx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+      var tag = "truck " + Math.round(act.conf * 100) + "%";
+      ovCtx.font = "600 " + font + "px 'IBM Plex Mono', monospace";
+      var tgw = ovCtx.measureText(tag).width;
+      var lift = (act.bay.id % 2) * (font + 8 * scale);
+      ovCtx.fillStyle = "rgba(8,14,12,0.86)";
+      ovCtx.fillRect(minX, minY - (font + 7 * scale) - lift, tgw + 8 * scale, font + 6 * scale);
+      ovCtx.fillStyle = "#ffa434";
+      ovCtx.fillText(tag, minX + 4 * scale, minY - 4 * scale - lift);
+    }
+  }
+
+  // ------------------------------------------------------------------ loop
+  var W = 0, H = 0;
+  function resize() {
+    var r = viewport.getBoundingClientRect();
+    W = Math.max(320, Math.round(r.width));
+    H = Math.max(180, Math.round(r.height));
+    renderer.setSize(W, H, false);
+    camera.aspect = W / H;
+    camera.updateProjectionMatrix();
+    var dpr = Math.min(window.devicePixelRatio, 2);
+    ovCanvas.width = Math.round(W * dpr);
+    ovCanvas.height = Math.round(H * dpr);
+    ovCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  new ResizeObserver(resize).observe(viewport);
+
+  var last = performance.now();
+  function tick(now) {
+    var dt = Math.min((now - last) / 1000, 0.08);
+    last = now;
+    if (opt.play) updateActors(dt);
+    renderer.render(scene, camera);
+    drawOverlay(W, H);
+    var occ = actors.filter(function (a) { return a.phase === "parked" || a.phase === "parking"; }).length;
+    statline.textContent = slots.length + " bays monitored · " + actors.length +
+      " vehicle" + (actors.length === 1 ? "" : "s") + " tracked · " + occ + " occupied";
+    requestAnimationFrame(tick);
+  }
+
+  // --------------------------------------------------------------- rebuild
+  var statline = document.getElementById("statline");
+  var camline = document.getElementById("camline");
+
+  function rebuild(full) {
+    if (full) { clearActors(); slots = buildWorld(); }
+    else { slots = buildWorld(); clearActors(); }
+    camline.textContent = "CAM-04 · " + (opt.scene === "dusk" ? "18:40 low sun" : "12:20 midday");
+    document.getElementById("note-layout").innerHTML = NOTES.layout[opt.layout];
+    document.getElementById("note-truck").innerHTML = NOTES.truck[opt.truck];
+    document.getElementById("note-scene").innerHTML = NOTES.scene[opt.scene];
+  }
+
+  function wireSeg(id, key) {
+    var el = document.getElementById(id);
+    el.addEventListener("click", function (ev) {
+      var btn = ev.target.closest("button");
+      if (!btn) return;
+      var v = btn.dataset.v;
+      if (id === "seg-play") {
+        if (v === "reset") { resetView(); return; }
+        opt.play = v === "run";
+      } else {
+        opt[key] = v;
+      }
+      Array.prototype.forEach.call(el.querySelectorAll("button"), function (b) {
+        if (b.dataset.v === "reset") return;
+        b.setAttribute("aria-pressed", String(b.dataset.v === v));
+      });
+      if (id !== "seg-play") rebuild(true);
+    });
+  }
+  [["seg-layout", opt.layout], ["seg-truck", opt.truck], ["seg-scene", opt.scene]].forEach(function (pair) {
+    var el = document.getElementById(pair[0]);
+    Array.prototype.forEach.call(el.querySelectorAll("button"), function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.v === pair[1]));
+    });
+  });
+  wireSeg("seg-layout", "layout");
+  wireSeg("seg-truck", "truck");
+  wireSeg("seg-scene", "scene");
+  wireSeg("seg-play", "play");
+
+  // ----------------------------------------------------------- drag orbit
+  var drag = null;
+  viewport.addEventListener("pointerdown", function (e) {
+    drag = { x: e.clientX, y: e.clientY, theta: view.theta, phi: view.phi };
+    viewport.setPointerCapture(e.pointerId);
+  });
+  viewport.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    view.theta = drag.theta - (e.clientX - drag.x) * 0.005;
+    view.phi = Math.max(0.14, Math.min(1.2, drag.phi + (e.clientY - drag.y) * 0.004));
+    applyCamera();
+  });
+  ["pointerup", "pointercancel"].forEach(function (t) {
+    viewport.addEventListener(t, function () { drag = null; });
+  });
+  viewport.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    view.radius = Math.max(20, Math.min(140, view.radius + e.deltaY * 0.06));
+    applyCamera();
+  }, { passive: false });
+
+  // ------------------------------------------------------------------ boot
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    opt.play = false;
+    var pl = document.getElementById("seg-play");
+    pl.querySelector('[data-v="run"]').setAttribute("aria-pressed", "false");
+    pl.querySelector('[data-v="hold"]').setAttribute("aria-pressed", "true");
+  }
+  if (Q.has("bare")) document.body.classList.add("bare");
+  resize();
+  rebuild(true);
+  // Seed parked trucks so the first frame is never an empty yard.
+  var seed = Math.max(0, Math.min(FILL, slots.length));
+  for (var w0 = 0; w0 < seed; w0++) { spawnActor(); }
+  actors.forEach(function (a, i) {
+    a.phase = "parked"; a.t = i * 1.6;
+    a.mesh.position.set(a.bay.x, 0, a.bay.z);
+    a.mesh.rotation.y = a.parkYaw;
+  });
+  requestAnimationFrame(tick);
+})();
+</script>
