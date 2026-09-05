@@ -81,6 +81,12 @@ class Settings:
     # (like trucks seen from far away) at a latency cost — see the README
     # benchmark table before changing.
     imgsz: int | None = field(default_factory=lambda: _env_optional_int("PARKING_IMGSZ", None))
+    # Cap on torch intra-op threads (``torch.set_num_threads``). Critical on
+    # single-vCPU hosts (e.g. Fly.io shared-cpu-1x): torch otherwise spawns one
+    # thread per host core and thrashes the vCPU quota. None = torch default.
+    torch_threads: int | None = field(
+        default_factory=lambda: _env_optional_int("PARKING_TORCH_THREADS", None)
+    )
     host: str = field(default_factory=lambda: _env_str("PARKING_HOST", "127.0.0.1"))
     port: int = field(default_factory=lambda: _env_int("PARKING_PORT", 8000))
     # Directory containing the built frontend (frontend/dist) to serve at "/".

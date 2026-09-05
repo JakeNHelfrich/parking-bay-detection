@@ -96,6 +96,7 @@ All knobs are environment variables (see `server/app/config.py`):
 | `PARKING_CONF_THRESHOLD` | `0.35` | Minimum detection confidence |
 | `PARKING_ALLOWED_CLASSES` | `truck` | Comma-separated COCO class names |
 | `PARKING_IMGSZ` | *(model default, 640)* | Inference input size (longest edge, px). Larger = better small-object recall, proportionally slower |
+| `PARKING_TORCH_THREADS` | *(torch default)* | Cap on torch intra-op threads. Set to the machine's vCPU count — **must be 1 on single-vCPU hosts** (Fly shared/performance-1x), where torch's per-host-core default thrashes the quota |
 | `PARKING_HOST` / `PARKING_PORT` | `127.0.0.1` / `8000` | Bind address |
 
 Measured inference latency (yolov8n, CPU, Apple Silicon, Ultralytics `bus.jpg`, `conf=0.35`):
@@ -253,8 +254,9 @@ fly status               # then open https://<app>.fly.dev
 ```
 
 - The image bakes in `server/simtruck.pt` and sets `PARKING_DETECTOR=yolo`, `PARKING_MODEL_NAME=/srv/models/simtruck.pt` (weights are in the image, so `/health` never depends on network at boot).
-- Sized `shared-cpu-1x` / 1024 MB (~$4–8/mo): CPU torch + the fine-tuned model want ~700 MB resident. For a stub-detector demo, set `PARKING_DETECTOR=stub` and drop memory to 256 MB in `fly.toml` (~$2/mo).
-- `auto_stop_machines = "suspend"` bills nothing while idle; an incoming request wakes it. Active WebSocket sessions keep the machine running.
+- Sized `performance-1x` / 2048 MB (~$13–16/mo): **dedicated** vCPU. Inference measured ~80 ms on a multithreaded laptop CPU (imgsz 960) but 2–5 s on `shared-cpu-1x` under burst throttling — the shared quota, not the wire protocol, was the latency source. `PARKING_TORCH_THREADS=1` is set in `fly.toml` (1 vCPU ⇒ 1 thread). For a stub-detector demo, set `PARKING_DETECTOR=stub` and drop to `shared-cpu-1x` / 256 MB (~$2/mo).
+- The client paces capture to server replies (≤ 1 frame in flight), so a slow backend bounds latency to ~1 inference instead of accumulating frames; the 12 fps throttle still caps the fast path.
+- `auto_stop_machines = "suspend"` bills nothing while idle; an incoming request wakes it (suspend/resume keeps RAM, so the loaded model survives). Active WebSocket sessions keep the machine running.
 - Serving the frontend from FastAPI is controlled by `PARKING_STATIC_DIR` (set to `/srv/static` in the image). If the directory is absent — local dev, tests — nothing is mounted and the frontend runs from the Vite dev server as usual.
 
 ## Known considerations

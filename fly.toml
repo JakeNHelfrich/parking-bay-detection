@@ -5,8 +5,10 @@
 # `fly machines clone <id> --region <region>` then destroy the old machine.
 # The app name must be globally unique on Fly — change `app` below if taken.
 #
-# Cost note: shared-cpu-1x + 1024MB runs ~$4-8/mo (torch CPU + yolov8n-class
-# weights want ~700MB resident). For a stub-detector demo, drop memory to 256.
+# Cost note: performance-1x + 2048MB runs ~$13-16/mo. This matters: inference
+# measured ~80ms on a multithreaded laptop CPU (imgsz 960) but seconds on a
+# shared-cpu-1x vCPU — the shared/burstable quota is the source of the 2-5s
+# latency spikes. For a stub-detector demo, drop to shared-cpu-1x + 256MB.
 
 app = 'parking-bay-detection'
 primary_region = 'syd' # Sydney — closest Fly region to Perth (no 'per'; 'sin' is the alternative)
@@ -28,5 +30,12 @@ primary_region = 'syd' # Sydney — closest Fly region to Perth (no 'per'; 'sin'
     hard_limit = 60
 
 [[vm]]
-  size = 'shared-cpu-1x'
-  memory = '1024mb'
+  # Dedicated (not shared/burstable) vCPU: torch inference is the bottleneck,
+  # and shared-cpu quota exhaustion shows up as multi-second latencyMs spikes.
+  size = 'performance-1x'
+  memory = '2048mb'
+
+[env]
+  # One torch thread: the machine has exactly 1 vCPU, and torch would
+  # otherwise spawn one worker thread per host core and thrash the quota.
+  PARKING_TORCH_THREADS = '1'

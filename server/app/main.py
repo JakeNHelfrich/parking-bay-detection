@@ -146,7 +146,10 @@ async def ws_detect(socket: WebSocket) -> None:
                     continue
                 try:
                     # The single decode site; pixels flow to the detector only.
-                    image = decode_jpeg(payload)
+                    # Off the event loop: on a slow vCPU a decode blocks reads,
+                    # which delays frame intake and blunts latest-wins
+                    # coalescing exactly when it matters (under load).
+                    image = await asyncio.to_thread(decode_jpeg, payload)
                 except MalformedFrameError as exc:
                     await send_json_safe({"type": "error", "message": str(exc)})
                     continue

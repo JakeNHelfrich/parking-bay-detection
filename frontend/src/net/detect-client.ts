@@ -32,6 +32,8 @@ export class DetectClient {
   private attempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private closedByUser = false;
+  /** frameId of the last sent frame whose reply has not arrived yet. */
+  private pendingFrameId: number | null = null;
 
   constructor(options: DetectClientOptions) {
     this.options = options;
@@ -55,6 +57,16 @@ export class DetectClient {
   }
 
   /**
+   * True while a sent frame awaits its server reply (detections OR error).
+   * The capture loop reads this to pace itself: at most one frame in flight,
+   * so the send rate converges to the server's real throughput instead of
+   * overrunning a slow backend with frames it will only coalesce away.
+   */
+  get awaitingReply(): boolean {
+    return this.pendingFrameId !== null;
+  }
+
+  /**
    * Sends one frame (text header + binary JPEG). Returns false when the
    * socket is not open — the frame is dropped, never buffered.
    */
@@ -63,6 +75,7 @@ export class DetectClient {
     if (socket === null || socket.readyState !== WebSocket.OPEN) return false;
     socket.send(frameHeaderMessage(frameId));
     socket.send(jpegData);
+    this.pendingFrameId = frameId;
     return true;
   }
 
@@ -81,11 +94,20 @@ export class DetectClient {
     socket.addEventListener('message', (event: MessageEvent) => {
       // Binary data never arrives server→client; only JSON text is expected.
       const parsed = parseServerMessage(event.data);
-      if (parsed !== null) this.options.onMessage(parsed);
+      if (parsed !== null) {
+        // Any server message (detections or error) settles the pending frame —
+        // the server replies to every frame it processes and skips only
+        // frames superseded by a newer one, which cannot be the pending one.
+        this.pendingFrameId = null;
+        this.options.onMessage(parsed);
+      }
     });
 
     const scheduleReconnect = (): void => {
       this.socket = null;
+      // A dropped socket can never deliver the pending reply; clear it so
+      // capture resumes once reconnected instead of stalling forever.
+      this.pendingFrameId = null;
       this.options.onStatus('offline');
       if (this.closedByUser) return;
       const delay = reconnectDelayMs(this.attempt);

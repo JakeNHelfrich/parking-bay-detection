@@ -227,12 +227,14 @@ class YoloDetector:
         allowed_classes: list[str] | None = None,
         confidence_threshold: float = 0.35,
         imgsz: int | None = None,
+        torch_threads: int | None = None,
         model_factory: Callable[[str], object] | None = None,
     ) -> None:
         self.model_label = model_name
         self._model_name = model_name
         self._confidence_threshold = confidence_threshold
         self._imgsz = imgsz
+        self._torch_threads = torch_threads
         self._model_factory = model_factory
         self._model: object | None = None
         self._allowed_classes = list(allowed_classes) if allowed_classes is not None else ["truck"]
@@ -249,6 +251,17 @@ class YoloDetector:
                 # Deferred heavy import: base installs (tests, stub mode) never
                 # need ultralytics/torch. Ignored here and re-raised below.
                 from ultralytics import YOLO  # noqa: PLC0415
+
+                # Cap torch's thread pools BEFORE the first predict: by default
+                # torch spawns one thread per *host* core, but a Fly.io
+                # shared-cpu-1x machine only gets ~1 vCPU of quota — N threads
+                # contending for 1 core of CPU time adds seconds of latency.
+                # (torch is already loaded by the ultralytics import above.)
+                if self._torch_threads is not None:  # noqa: PLC0415
+                    import torch  # noqa: PLC0415
+
+                    torch.set_num_threads(self._torch_threads)
+                    torch.set_num_interop_threads(1)
 
                 factory = self._model_factory if self._model_factory is not None else YOLO
                 model = factory(self._model_name)
@@ -357,12 +370,14 @@ def create_detector(settings: object) -> Detector:
         model_name = str(getattr(settings, "model_name", "") or YoloDetector.DEFAULT_MODEL)
         allowed_classes = list(getattr(settings, "allowed_classes", ["truck"]))
         imgsz = getattr(settings, "imgsz", None)
+        torch_threads = getattr(settings, "torch_threads", None)
         try:
             return YoloDetector(
                 model_name=model_name,
                 allowed_classes=allowed_classes,
                 confidence_threshold=confidence_threshold,
                 imgsz=imgsz if isinstance(imgsz, int) else None,
+                torch_threads=torch_threads if isinstance(torch_threads, int) else None,
             )
         except ModelLoadError:
             raise

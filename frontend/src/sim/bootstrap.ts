@@ -122,6 +122,12 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
     // Reading the immutable snapshot here keeps capture decoupled from the UI
     // (invariant 2) — no awaits, no UI dependency, just a boolean read.
     if (!store.getState().simRunning) return;
+    // Reply-paced backpressure: skip capture while the previous frame's reply
+    // is still in flight, so the effective rate is min(CAPTURE_FPS, server
+    // throughput). Under a slow backend this bounds latency to ~1 inference
+    // instead of streaming frames the server only coalesces away. Still
+    // fire-and-forget — this is a skip check, never an await.
+    if (client.awaitingReply) return;
     const frameId = latestFrameId + 1;
     const pending = capture.capture(world.domElement, frameId, now);
     if (pending === null) return; // throttled or previous capture still in flight
