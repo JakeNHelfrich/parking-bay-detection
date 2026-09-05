@@ -9,6 +9,7 @@ import { isStaleFrame } from './net/stale-frame';
 import { resolveDetectWsUrl } from './net/ws-url';
 import { loadBayLayout } from './bays/bay-defs';
 import { computeBayStates } from './bays/occupancy';
+import { createAppStateStore } from './state/store';
 import { Overlay } from './overlay/overlay';
 import { createBayField } from './scene/bays';
 import { TruckSimulator } from './scene/truck-simulator';
@@ -17,6 +18,11 @@ import { initGroundTruthCapture, isGroundTruthMode } from './scene/gt';
 
 const container = document.querySelector<HTMLDivElement>('#app');
 if (!container) throw new Error('#app container missing from index.html');
+
+// Composition root: the single app-state store is created here, once, and is
+// the only allowed bridge between the pipeline below and any UI consumers
+// (via the React adapter in src/state/react.ts). No module-level singletons.
+const store = createAppStateStore();
 
 const world = createWorld(container);
 const bays = createBayField(world.scene);
@@ -35,6 +41,7 @@ function runDemoPipeline(
   world: ReturnType<typeof createWorld>,
   simulator: TruckSimulator,
 ): void {
+  store.setSimRunning(true);
   const overlay = new Overlay(container);
 
   // Normalized detections/bays describe the 16:9 scene, which world.ts renders
@@ -70,10 +77,16 @@ function runDemoPipeline(
       if (isStaleFrame(message.frameId, shownFrameId)) return; // dropped, never queued
       latestDetections = message;
       overlay.setDetections(message);
-      if (bayLayout !== null) overlay.setBayStates(computeBayStates(bayLayout.bays, message.detections));
+      store.setDetections(message);
+      if (bayLayout !== null) {
+        const states = computeBayStates(bayLayout.bays, message.detections);
+        overlay.setBayStates(states);
+        store.setBayStates(states);
+      }
     },
     onStatus(status: ConnectionStatus) {
       overlay.setStatus(status);
+      store.setConnectionStatus(status);
     },
   });
   client.connect();
@@ -89,6 +102,9 @@ function runDemoPipeline(
     }
     bayLayout = layout;
     overlay.setBays(layout.bays);
+    store.setBayLayout(layout);
+    // Bay states are (re)derived on the next accepted detections message,
+    // exactly as before this refactor.
   });
 
   let latestFrameId = 0;
@@ -127,6 +143,12 @@ function runDemoPipeline(
     maybeCaptureAndSend(now);
     tickFps(now);
     overlay.setHud({
+      frameId: latestDetections?.frameId ?? null,
+      latencyMs: latestDetections?.latencyMs ?? null,
+      inferenceMs: latestDetections?.inferenceMs ?? null,
+      captureFps,
+    });
+    store.setHud({
       frameId: latestDetections?.frameId ?? null,
       latencyMs: latestDetections?.latencyMs ?? null,
       inferenceMs: latestDetections?.inferenceMs ?? null,
