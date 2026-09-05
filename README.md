@@ -2,7 +2,7 @@
 
 A computer-vision project that detects trucks and parking-bay occupancy in a **simulated** 3D scene.
 
-A TypeScript + Three.js frontend renders a simulated parking lot with moving trucks. Frames of the simulation are streamed to a Python FastAPI backend running a YOLO object-detection model. The backend returns bounding boxes for detected trucks, which are overlaid back onto the frontend in real time. Parking bays are then marked **FULL** or **EMPTY** based on whether a detected truck overlaps them.
+A TypeScript + Three.js frontend renders a simulated **depot yard** — a warehouse dock wall with four far-side (north) bays, approached across a lane by rigid box trucks. Frames of the simulation are streamed to a Python FastAPI backend running a YOLO object-detection model. The backend returns bounding boxes for detected trucks, which are overlaid back onto the frontend in real time. Parking bays are then marked **FULL** or **EMPTY** based on whether a detected truck overlaps them.
 
 ## Architecture
 
@@ -69,7 +69,8 @@ By default the server runs a **stub detector** (`PARKING_DETECTOR=stub`) that re
 
 ### Parking bay occupancy
 
-- Bays are defined in `bays.json` as normalized rectangles (same coordinate space as detections), so bay layout can be tuned without code changes.
+- Bays are defined in `bays.json` as normalized rectangles (same coordinate space as detections), so bay layout can be tuned without code changes. The current map holds **four bays in a single far-side (north) rank** facing the warehouse dock; the near rank between camera and lane was removed in the depot-yard overhaul because its overlay boxes stacked on the far ones.
+- **Bay rects are derived from the scene, not eyeballed.** Each rect is the AABB of the bay quad's corners projected through the approved default camera (same NDC → normalized top-left math as `frontend/src/scene/gt.ts`). Moving the camera or the bay layout invalidates `bays.json` — regenerate it with the projection, or occupancy scoring silently drifts (stale rects don't error).
 - **Bays are identities, not model output.** A bay's identity is its stable `id` in the bay map; the detector only sees trucks and knows nothing about bays. Occupancy is derived entirely in the frontend by matching truck bboxes against the bay map (`frontend/src/bays/occupancy.ts`). A real-world deployment would replace the hand-authored bay map with a CV calibration pass that persists detected bay rects — the runtime matching layer would not change.
 - A bay is **FULL** when `IoU(truck bbox, bay rect) ≥ threshold` (default `0.3`, see [Threshold tuning measurements](#threshold-tuning-measurements)), or when the truck's bbox center falls inside the bay (configurable strategy).
 - The frontend draws bay outlines colored by state (green = empty, red = full), and the sidebar lists one card per bay with its live state (`Clear · N% confidence` / `Occupied · truck detected`).
@@ -184,6 +185,9 @@ Trade-off to be aware of: the fine-tuned model is a **sim specialist** — near-
 in this domain, weaker than stock COCO weights on real-world photos. That is the
 correct trade for a demo whose camera is this sim; if the scene ever changes
 (assets, camera, palette), regenerate the dataset the same way and retrain (~30 min).
+(The 2026-09-05 depot-yard overhaul — 4 far-side bays, rigid truck model, warehouse
+scenery, reframed camera — did exactly that: the dataset was recollected from the new
+scene and `simtruck.pt` retrained before the scene landed.)
 
 ## Project layout
 
@@ -196,7 +200,7 @@ parking-bay-detection/
 │   │   ├── ui/             # React components (AppHeader, bay cards, health card, primitives, tokens)
 │   │   ├── state/          # immutable app-state store + React adapter (useSyncExternalStore)
 │   │   ├── sim/            # mountSim bootstrap: capture → detect → overlay glue
-│   │   ├── scene/          # three.js scene, trucks, bays, camera, ?gt capture
+│   │   ├── scene/          # three.js depot yard: world/camera/sky, bay paint, scenery, rigid truck model + actors, ?gt capture
 │   │   ├── capture/        # canvas → JPEG frame capture + throttling
 │   │   ├── net/            # WebSocket client (reconnect/backoff), frame ID bookkeeping
 │   │   ├── overlay/        # 2D canvas overlay (detection boxes + bay rects only)

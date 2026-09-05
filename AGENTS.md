@@ -82,6 +82,7 @@ These are architectural contracts. Do not break them without updating `README.md
 - **WebSocket lifecycle.** Frontend must reconnect with backoff if the server drops; the sim keeps rendering while disconnected (overlay just freezes/states "offline").
 - **Top-left origin.** Canvas and COCO-style pixel boxes both use top-left origin; Three.js uses bottom-left. Convert once, in the capture layer, and document the direction of conversion at the conversion site.
 - **bays.json is served from `public/`**, so it is fetched at runtime — remember it is not bundled and can be edited without a rebuild in dev.
+- **bays.json is derived from the camera, and the scene is 4 north bays only.** The current map holds a single far-side (north) rank (ids 0–3); each rect is the AABB of the bay quad projected through the approved default camera (same NDC → normalized top-left math as `src/scene/gt.ts`). Moving the camera or the bay layout silently mis-scores occupancy — regenerate the rects with that projection (a `?bays`-style dev dump mirroring `?gt` would make this one command; not built yet).
 
 ## When making changes
 
