@@ -63,11 +63,21 @@ describe('computeBayStates', () => {
   });
 
   it('matches by bbox center falling inside the margin-grown bay rect', () => {
-    // Tall truck whose bbox center sits inside the bay but whose area makes
-    // raw IoU tiny.
-    const tallTruck = { cls: 'truck', conf: 0.9, bbox: [0.16, 0.15, 0.08, 0.6] as const };
+    // Tall, narrow truck overhanging the bay: IoU with bay 0 is ≈ 0.11
+    // (below the 0.2 threshold), but the bbox center (0.205, 0.30) still
+    // falls inside bay 0's margin-grown rect (y reaches 0.305) → FULL via
+    // the center fallback.
+    const tallTruck = { cls: 'truck', conf: 0.9, bbox: [0.19, 0.05, 0.02, 0.5] as const };
     const states = computeBayStates(bays, [tallTruck]);
     expect(states.find((s) => s.bayId === 0)?.occupied).toBe(true);
+  });
+
+  it('ignores trucks whose overlap stays below the IoU threshold', () => {
+    // Truck overlapping bay 0's corner with IoU ≈ 0.1 and center outside
+    // the grown rect → EMPTY.
+    const truck = { cls: 'truck', conf: 0.9, bbox: [0.31, 0.29, 0.04, 0.04] as const };
+    const states = computeBayStates(bays, [truck]);
+    expect(states.find((s) => s.bayId === 0)?.occupied).toBe(false);
   });
 
   it('handles trucks smaller than the margin', () => {

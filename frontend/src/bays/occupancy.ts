@@ -18,7 +18,7 @@ export interface NormalizedRect {
 }
 
 /** Minimum IoU between a truck bbox and a bay rect to call the bay FULL. */
-export const OCCUPANCY_IOU_THRESHOLD = 0.1;
+export const OCCUPANCY_IOU_THRESHOLD = 0.2;
 
 /**
  * Bays grow by this margin (normalized units per edge) when matching, so a
