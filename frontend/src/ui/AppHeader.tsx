@@ -1,7 +1,8 @@
 /**
- * AppHeader — the BAYWATCH header bar per design/desktop.png: logo tile +
- * wordmark, connection status pill, camera chip, and the sim start/stop
- * control.
+ * AppHeader — the header bar: connection status pill, inference health pill,
+ * camera chip, and the sim start/stop control. (Brand/logo was removed —
+ * bead: remove BAYWATCH wordmark and logo icon — so the header is pure
+ * status + controls.)
  *
  * This is an app-level component (not a primitive): it consumes the store via
  * the `src/state/react.ts` adapter. It stays stateless — everything derives
@@ -12,7 +13,7 @@
 import { useAppState, useAppStateStore } from '../state/react';
 import type { ConnectionStatus } from '../net/detect-client';
 import { CAMERA_ID } from '../config';
-import { Button, CameraIcon, LogoMark, Pill } from './components';
+import { Button, CameraIcon, Pill } from './components';
 import { InferenceStatus } from './InferenceStatus';
 import styles from './AppHeader.module.css';
 
@@ -42,16 +43,9 @@ export function AppHeader() {
 
   return (
     <header className={styles.header}>
-      <div className={styles.brand}>
-        <span className={styles.logoTile}>
-          <LogoMark size={18} />
-        </span>
-        <span className={styles.wordmark}>BAYWATCH</span>
-      </div>
       <div className={styles.actions}>
-        {/* Pill + chip stay grouped so mobile can restack brand / pill+chip /
-            start button as three rows (design/mobile.png) while desktop keeps
-            one row. */}
+        {/* Pills + chip stay grouped so mobile can restack pill + chip /
+            start button as two rows while desktop keeps one row. */}
         <div className={styles.metaRow}>
           <Pill tone={pill.tone}>{pill.label}</Pill>
           {/* Inference health lives in the header too (bead: move inference

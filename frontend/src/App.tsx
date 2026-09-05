@@ -1,5 +1,5 @@
 /**
- * App root: the BAYWATCH shell (header / viewport / sidebar) with the
+ * App root: the app shell (header / viewport / sidebar) with the
  * imperative sim pipeline mounted inside the viewport panel.
  *
  * The store comes in as a prop from the composition root (`main.tsx`) and is

@@ -33,7 +33,7 @@ Both are imported once, at the top of `src/style.css` (Vite resolves the
 | Page background (light gray-green) | `--color-page` |
 | Cards / header bar surface | `--color-surface` |
 | Simulator viewport (dark slate) | `--color-viewport`, `--color-viewport-muted` |
-| Headings, wordmark | `--color-ink`, `--text-wordmark-*`, `--text-title-*` |
+| Headings, titles | `--color-ink`, `--text-title-*` |
 | Meta text ("98% confidence", "18 fps") | `--color-muted`, `--text-meta-*` |
 | "Live feed connected" pill / "Inference healthy" | `--color-accent-bg`, `--color-accent`, `--color-accent-strong`, `--radius-pill` |
 | "Start simulation" button (dark navy) | `--color-btn-dark`, `--radius-button` |

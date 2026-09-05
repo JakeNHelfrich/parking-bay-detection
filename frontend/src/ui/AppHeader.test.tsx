@@ -45,9 +45,9 @@ describe('pillForStatus', () => {
 });
 
 describe('AppHeader', () => {
-  it('renders brand, camera chip, pill, and start control', () => {
+  it('renders status pills, camera chip, and start control (no brand — the logo/wordmark were removed)', () => {
     const html = renderWithStore(createAppStateStore());
-    expect(html).toContain('BAYWATCH');
+    expect(html).not.toContain('BAYWATCH');
     expect(html).toContain('CAM-04');
     expect(html).toContain('Live feed connected'); // default status: connecting
     expect(html).toContain('Start simulation');

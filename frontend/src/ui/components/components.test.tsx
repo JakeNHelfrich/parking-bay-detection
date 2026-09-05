@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { createElement, Fragment } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Button, Card, Pill } from './index';
-import { CameraIcon, LogoMark, PulseIcon } from './icons';
+import { CameraIcon, PulseIcon } from './icons';
 
 describe('Button', () => {
   it('renders a button with its label', () => {
@@ -86,7 +86,7 @@ describe('Card', () => {
 
 describe('icons', () => {
   it('render inline SVGs at the requested size, stroked with currentColor', () => {
-    for (const Icon of [LogoMark, CameraIcon, PulseIcon]) {
+    for (const Icon of [CameraIcon, PulseIcon]) {
       const html = renderToStaticMarkup(createElement(Icon, { size: 24 }));
       expect(html).toContain('<svg');
       expect(html).toContain('stroke="currentColor"');

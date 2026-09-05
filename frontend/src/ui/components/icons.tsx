@@ -29,18 +29,6 @@ function IconSvg({ size = 20, children, ...rest }: IconProps) {
   );
 }
 
-/** Logo mark: stylized occupied/empty bay pair, "BAYWATCH" style mark. */
-export function LogoMark(props: IconProps) {
-  return (
-    <IconSvg {...props}>
-      <rect x="3" y="3" width="8" height="7" rx="1.5" />
-      <rect x="13" y="3" width="8" height="7" rx="1.5" />
-      <rect x="3" y="14" width="8" height="7" rx="1.5" />
-      <path d="M17 14v7M13.5 17.5h7" />
-    </IconSvg>
-  );
-}
-
 /** Camera: the sim viewport / capture indicator. */
 export function CameraIcon(props: IconProps) {
   return (

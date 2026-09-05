@@ -1,4 +1,4 @@
-/* BAYWATCH shell — header / viewport / sidebar (design/desktop.png,
+/* App shell — header / viewport / sidebar (design/desktop.png,
    design/tablet.png, design/mobile.png). Consumes tokens only (see
    src/ui/styles/README.md); breakpoint values are sampled from the three
    mockups and live here as local constants (media queries cannot use vars). */

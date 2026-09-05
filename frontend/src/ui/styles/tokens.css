@@ -25,7 +25,7 @@
      (e.g. empty-state icon circle #4d6d73). */
   --color-viewport-muted: #4d6d73;
 
-  /* Ink: near-black slate for headings, wordmark, primary text (#1f333c). */
+  /* Ink: near-black slate for headings, primary text (#1f333c). */
   --color-ink: #1f333c;
   /* Muted meta text: gray-slate for secondary copy, stats, timestamps
      (#6b7f86). */
@@ -60,11 +60,6 @@
 
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
-
-  /* Wordmark ("BAYWATCH"): bold, wide letter-spacing. */
-  --text-wordmark-size: 1.125rem;   /* 18px */
-  --text-wordmark-weight: 700;
-  --text-wordmark-tracking: 0.08em;
 
   /* Card titles ("Bay 01"): semibold. */
   --text-title-size: 1rem;          /* 16px */
