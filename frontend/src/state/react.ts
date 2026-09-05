@@ -42,11 +42,15 @@ export function useAppStateStore(): AppStateStore {
 /**
  * Subscribes to a slice of app state. See the module caveat: the selector
  * must return a primitive or a reference-stable value.
+ *
+ * The third argument is the server snapshot: without it, SSR
+ * (`renderToStaticMarkup`, used by component tests) throws.
  */
 export function useAppState<T>(selector: (state: AppState) => T): T {
   const store = useAppStateStore();
   return useSyncExternalStore(
     store.subscribe,
+    () => selector(store.getState()),
     () => selector(store.getState()),
   );
 }

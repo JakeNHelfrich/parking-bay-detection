@@ -20,48 +20,6 @@
 }
 
 /* --------------------------------------------------------------------- */
-/* Header bar                                                            */
-/* --------------------------------------------------------------------- */
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-surface);
-  border: var(--border-hairline);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.logoTile {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: var(--radius-card);
-  background: var(--color-btn-dark);
-  color: var(--color-on-dark);
-  flex-shrink: 0;
-}
-
-.wordmark {
-  font-size: var(--text-wordmark-size);
-  font-weight: var(--text-wordmark-weight);
-  letter-spacing: var(--text-wordmark-tracking);
-  color: var(--color-ink);
-}
-
-/* --------------------------------------------------------------------- */
 /* Main region: viewport panel + sidebar                                 */
 /* --------------------------------------------------------------------- */
 

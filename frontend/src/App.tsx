@@ -10,16 +10,17 @@
  * world.ts/overlay.ts, so the 16:9 letterbox tracks the panel, not the window.
  *
  * Sim lifecycle (bead 6kh): the sim does not auto-run. Until started, the
- * viewport shows the placeholder from the mockups; the header button toggles
- * `simRunning` in the store (a command into the store, not component state)
- * and flips between Start/Stop.
+ * viewport shows the placeholder from the mockups; the header control (now in
+ * `AppHeader`, bead: header UI) toggles `simRunning` in the store and flips
+ * between Start/Stop.
  */
 
 import { useEffect, useRef } from 'react';
 import { AppStateProvider, useAppState, useAppStateStore } from './state/react';
 import type { AppStateStore } from './state/store';
 import { mountSim } from './sim/bootstrap';
-import { Button, CameraIcon, LogoMark } from './ui/components';
+import { AppHeader } from './ui/AppHeader';
+import { CameraIcon } from './ui/components';
 import styles from './App.module.css';
 
 interface AppProps {
@@ -47,15 +48,7 @@ function Shell() {
 
   return (
     <div className={styles.shell}>
-      <header className={styles.header}>
-        <div className={styles.brand}>
-          <span className={styles.logoTile}>
-            <LogoMark size={18} />
-          </span>
-          <span className={styles.wordmark}>BAYWATCH</span>
-        </div>
-        <SimToggleButton simRunning={simRunning} />
-      </header>
+      <AppHeader />
       <main className={styles.main}>
         <section className={styles.viewportPanel} aria-label="Simulator viewport">
           <div className={styles.simHost} ref={simHostRef} />
@@ -69,16 +62,6 @@ function Shell() {
         </aside>
       </main>
     </div>
-  );
-}
-
-/** Header control that starts/stops the simulation via the store. */
-function SimToggleButton({ simRunning }: { readonly simRunning: boolean }) {
-  const store = useAppStateStore();
-  return (
-    <Button onClick={() => store.setSimRunning(!simRunning)}>
-      {simRunning ? 'Stop simulation' : 'Start simulation'}
-    </Button>
   );
 }
 
