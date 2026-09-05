@@ -7,10 +7,13 @@ malformed input (socket stays open and remains usable).
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
+from app.main import app
 from tests.conftest import make_jpeg
 
 
@@ -56,12 +59,48 @@ class TestFramePipeline:
                 assert 0.0 <= w <= 1.0 and 0.0 <= h <= 1.0
 
     def test_frame_ids_are_echoed_in_order(self, client: TestClient) -> None:
+        """When the client keeps pace (send → read), every frame gets a reply."""
         with client.websocket_connect("/ws/detect") as ws:
             send_hello(ws)
             for frame_id in (10, 11, 12):
                 send_frame(ws, frame_id, make_jpeg())
-            for frame_id in (10, 11, 12):
                 assert read_detections(ws)["frameId"] == frame_id
+
+    def test_backlog_coalesces_to_latest_frame(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Under load, superseded frames are skipped; the newest always wins.
+
+        A deliberately slow detector makes the interleaving deterministic:
+        frames 11/12 arrive while frame 10 is mid-inference, so at most frame
+        10 and the final frame 12 are answered — never 11, and 12 is last.
+        """
+
+        class SlowDetector:
+            model_label = "slow-stub"
+
+            def infer(self, image: object, frame_id: int = 0) -> list[object]:
+                del image
+                time.sleep(0.15)
+                return []
+
+        monkeypatch.setattr(app.state, "detector", SlowDetector())
+        with client.websocket_connect("/ws/detect") as ws:
+            send_hello(ws)
+            send_frame(ws, 10, make_jpeg())
+            time.sleep(0.05)  # let frame 10 start inference
+            send_frame(ws, 11, make_jpeg())
+            send_frame(ws, 12, make_jpeg())
+            replies = [read_detections(ws)]
+            while replies[-1]["frameId"] != 12:
+                replies.append(read_detections(ws))
+            ids = [message["frameId"] for message in replies]
+            assert ids[-1] == 12
+            assert ids == sorted(set(ids))  # in-order, no duplicates
+            assert len(ids) <= 2  # superseded frames were skipped
+            # Socket remains usable after the backlog.
+            send_frame(ws, 13, make_jpeg())
+            assert read_detections(ws)["frameId"] == 13
 
     def test_hello_only_session_is_accepted(self, client: TestClient) -> None:
         """hello with no frames: server stays connected and silent."""

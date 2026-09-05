@@ -53,8 +53,16 @@ class FakeModel:
         conf: float,
         classes: list[int],
         verbose: bool,
+        **extra: object,
     ) -> list[FakeResult]:
-        self.calls.append({"source": source, "conf": conf, "classes": classes, "verbose": verbose})
+        call: dict[str, object] = {
+            "source": source,
+            "conf": conf,
+            "classes": classes,
+            "verbose": verbose,
+            **extra,
+        }
+        self.calls.append(call)
         assert self.result is not None, "test must set .result before predict"
         return [self.result]
 
@@ -72,6 +80,7 @@ def make_detector(
     model_name: str = "yolov8n.pt",
     allowed_classes: list[str] | None = None,
     confidence_threshold: float = 0.35,
+    imgsz: int | None = None,
     model_factory: Callable[[str], object] | None = None,
 ) -> tuple[YoloDetector, FakeModel]:
     if model_factory is None:
@@ -88,6 +97,7 @@ def make_detector(
             model_name=model_name,
             allowed_classes=allowed_classes,
             confidence_threshold=confidence_threshold,
+            imgsz=imgsz,
             model_factory=lambda _name: fake,
         )
         return detector, fake
@@ -204,6 +214,17 @@ class TestInferenceMapping:
         detector.infer(Image.new("RGB", (64, 48)))
         assert fake.calls[0]["conf"] == 0.55
 
+    def test_predict_receives_imgsz_when_set(self) -> None:
+        detector, fake = make_detector(imgsz=960)
+        detector.infer(Image.new("RGB", (64, 48)))
+        assert fake.calls[0]["imgsz"] == 960
+
+    def test_predict_omits_imgsz_by_default(self) -> None:
+        """Unset imgsz must fall through to the model default, not None."""
+        detector, fake = make_detector()
+        detector.infer(Image.new("RGB", (64, 48)))
+        assert "imgsz" not in fake.calls[0]
+
 
 class TestCreateDetectorYolo:
     def test_yolo_settings_build_lazy_detector(self) -> None:
@@ -218,6 +239,18 @@ class TestCreateDetectorYolo:
         assert detector.model_label == "yolov8n.pt"  # default kicks in when unset
         # Construction is cheap: no model was loaded by the factory.
         detector.ensure_loaded()  # would raise only if the default factory ran
+
+    def test_yolo_settings_pass_imgsz_through(self) -> None:
+        settings = SimpleNamespace(
+            detector="yolo",
+            model_name="",
+            allowed_classes=["truck"],
+            confidence_threshold=0.4,
+            imgsz=960,
+        )
+        detector = create_detector(settings)
+        assert isinstance(detector, YoloDetector)
+        assert detector._imgsz == 960
 
     def test_yolo_custom_model_name_preserved(self) -> None:
         settings = SimpleNamespace(

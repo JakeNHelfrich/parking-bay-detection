@@ -97,9 +97,7 @@ class StubDetector:
 
     def infer(self, image: Image.Image, frame_id: int = 0) -> list[Detection]:
         del image  # The stub never looks at pixels.
-        detections = [
-            Detection(cls="truck", conf=0.91, bbox=self.PARKED_BBOX)
-        ]
+        detections = [Detection(cls="truck", conf=0.91, bbox=self.PARKED_BBOX)]
         # Driving truck sweeps along the lane, left-front → right-far, then
         # wraps around. Position and size lerp between the projected
         # endpoint rects; the perspective path curves slightly, ignored here.
@@ -226,11 +224,13 @@ class YoloDetector:
         model_name: str = DEFAULT_MODEL,
         allowed_classes: list[str] | None = None,
         confidence_threshold: float = 0.35,
+        imgsz: int | None = None,
         model_factory: Callable[[str], object] | None = None,
     ) -> None:
         self.model_label = model_name
         self._model_name = model_name
         self._confidence_threshold = confidence_threshold
+        self._imgsz = imgsz
         self._model_factory = model_factory
         self._model: object | None = None
 
@@ -265,12 +265,17 @@ class YoloDetector:
     def infer(self, image: Image.Image, frame_id: int = 0) -> list[Detection]:
         del frame_id  # stateless backend; frame_id is only meaningful to stubs
         model = self._ensure_model()
-        results = model.predict(  # type: ignore[attr-defined]
-            source=image,
-            conf=self._confidence_threshold,
-            classes=self._class_ids,
-            verbose=False,
-        )
+        # predict kwargs are built explicitly so an unset imgsz falls through
+        # to the model default rather than overriding it with None.
+        predict_kwargs: dict[str, object] = {
+            "source": image,
+            "conf": self._confidence_threshold,
+            "classes": self._class_ids,
+            "verbose": False,
+        }
+        if self._imgsz is not None:
+            predict_kwargs["imgsz"] = self._imgsz
+        results = model.predict(**predict_kwargs)  # type: ignore[attr-defined]
         return _result_to_detections(results[0], image.size)
 
 
@@ -331,11 +336,13 @@ def create_detector(settings: object) -> Detector:
     if detector_kind == "yolo":
         model_name = str(getattr(settings, "model_name", "") or YoloDetector.DEFAULT_MODEL)
         allowed_classes = list(getattr(settings, "allowed_classes", ["truck"]))
+        imgsz = getattr(settings, "imgsz", None)
         try:
             return YoloDetector(
                 model_name=model_name,
                 allowed_classes=allowed_classes,
                 confidence_threshold=confidence_threshold,
+                imgsz=imgsz if isinstance(imgsz, int) else None,
             )
         except ModelLoadError:
             raise

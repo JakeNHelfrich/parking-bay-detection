@@ -63,6 +63,8 @@ A per-frame text header sent immediately before each binary JPEG, so the server 
 
 Malformed input (undecodable JPEG, missing frame header, invalid JSON) is answered with `{ "type": "error", "message": "…" }` and the socket stays open.
 
+**Backpressure (latest-wins).** Inference runs off the event loop, and at most one frame is queued at a time: when a newer complete frame arrives, the queued one is dropped and never replied to. Clients match replies by `frameId` and drop stale results, so under load (inference slower than capture) the backlog converges to the newest frame instead of growing without bound. When the client keeps pace, every frame gets a reply.
+
 By default the server runs a **stub detector** (`PARKING_DETECTOR=stub`) that returns canned, deterministic trucks: one parked and one sweeping across the frame per `frameId` — useful for frontend work without model weights. Set `PARKING_DETECTOR=yolo` (plus `pip install -e ".[model]"`) to run real YOLOv8n inference: the model lazy-loads exactly once (weight load failures surface as a 503 on `/health`), detections are filtered to the configured COCO classes (`PARKING_ALLOWED_CLASSES`, default `truck`), and `PARKING_CONF_THRESHOLD` tunes confidence.
 
 ### Parking bay occupancy
@@ -70,6 +72,30 @@ By default the server runs a **stub detector** (`PARKING_DETECTOR=stub`) that re
 - Bays are defined in `bays.json` as normalized rectangles (same coordinate space as detections), so bay layout can be tuned without code changes.
 - A bay is **FULL** when `IoU(truck bbox, bay rect) ≥ threshold` (default `0.2`), or when the truck's bbox center falls inside the bay (configurable strategy).
 - The frontend draws bay outlines colored by state (green = empty, red = full) and a summary count.
+
+### Performance & tuning
+
+All knobs are environment variables (see `server/app/config.py`):
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `PARKING_DETECTOR` | `stub` | `stub` (canned boxes) or `yolo` (real model) |
+| `PARKING_MODEL_NAME` | `yolov8n.pt` | Any Ultralytics weights (local `.pt` path for fine-tuned models) |
+| `PARKING_CONF_THRESHOLD` | `0.35` | Minimum detection confidence |
+| `PARKING_ALLOWED_CLASSES` | `truck` | Comma-separated COCO class names |
+| `PARKING_IMGSZ` | *(model default, 640)* | Inference input size (longest edge, px). Larger = better small-object recall, proportionally slower |
+| `PARKING_HOST` / `PARKING_PORT` | `127.0.0.1` / `8000` | Bind address |
+
+Measured inference latency (yolov8n, CPU, Apple Silicon, Ultralytics `bus.jpg`, `conf=0.35`):
+
+| `PARKING_IMGSZ` | Median inference | Boxes found |
+| --- | --- | --- |
+| 320 | ~12 ms | 4 |
+| 640 (default) | ~34 ms | 4 |
+| 960 | ~80 ms | 5 |
+| 1280 | ~128 ms | 7 |
+
+Rule of thumb: latency scales ~quadratically with `imgsz`. Raise it only when small objects are being missed; at the default 10–15 fps capture, even 960 keeps end-to-end latency under a second. Benchmark via the HUD's `inferenceMs` before and after any tuning change.
 
 ## Project layout
 

@@ -36,6 +36,16 @@ def _env_int(key: str, default: int) -> int:
         return default
 
 
+def _env_optional_int(key: str, default: int | None) -> int | None:
+    raw = os.environ.get(key)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
 def _env_str_list(key: str, default: list[str]) -> list[str]:
     raw = os.environ.get(key)
     if raw is None or not raw.strip():
@@ -60,6 +70,11 @@ class Settings:
     allowed_classes: list[str] = field(
         default_factory=lambda: _env_str_list("PARKING_ALLOWED_CLASSES", ["truck"])
     )
+    # Inference input size (longest edge, pixels) for the YOLO backend, e.g.
+    # 960. None uses the model default. Larger values help with small objects
+    # (like trucks seen from far away) at a latency cost — see the README
+    # benchmark table before changing.
+    imgsz: int | None = field(default_factory=lambda: _env_optional_int("PARKING_IMGSZ", None))
     host: str = field(default_factory=lambda: _env_str("PARKING_HOST", "127.0.0.1"))
     port: int = field(default_factory=lambda: _env_int("PARKING_PORT", 8000))
 
