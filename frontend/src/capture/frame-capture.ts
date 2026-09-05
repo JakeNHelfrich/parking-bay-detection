@@ -38,16 +38,22 @@ export interface CapturedFrame {
 export class FrameCapture {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
+  private readonly minIntervalMs: number;
   private inFlight = false;
   private lastCaptureMs = Number.NEGATIVE_INFINITY;
 
-  constructor(width: number = CAPTURE_WIDTH, height: number = CAPTURE_HEIGHT) {
+  constructor(
+    width: number = CAPTURE_WIDTH,
+    height: number = CAPTURE_HEIGHT,
+    minIntervalMs: number = CAPTURE_MIN_INTERVAL_MS,
+  ) {
     this.canvas = document.createElement('canvas');
     this.canvas.width = width;
     this.canvas.height = height;
     const ctx = this.canvas.getContext('2d', { alpha: false });
     if (ctx === null) throw new Error('2D context unavailable for capture canvas');
     this.ctx = ctx;
+    this.minIntervalMs = minIntervalMs;
   }
 
   get capturing(): boolean {
@@ -64,7 +70,7 @@ export class FrameCapture {
     frameId: number,
     nowMs: number,
   ): Promise<CapturedFrame> | null {
-    if (!shouldStartCapture(nowMs, this.lastCaptureMs, CAPTURE_MIN_INTERVAL_MS, this.inFlight)) {
+    if (!shouldStartCapture(nowMs, this.lastCaptureMs, this.minIntervalMs, this.inFlight)) {
       return null;
     }
     this.inFlight = true;

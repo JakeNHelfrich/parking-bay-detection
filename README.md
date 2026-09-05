@@ -97,6 +97,42 @@ Measured inference latency (yolov8n, CPU, Apple Silicon, Ultralytics `bus.jpg`, 
 
 Rule of thumb: latency scales ~quadratically with `imgsz`. Raise it only when small objects are being missed; at the default 10–15 fps capture, even 960 keeps end-to-end latency under a second. Benchmark via the HUD's `inferenceMs` before and after any tuning change.
 
+#### Fine-tuning for the sim domain (why the weights are custom)
+
+Stock COCO `yolov8n.pt` detects **zero** trucks on this sim's frames — measured, not
+assumed: across real captures × upscale factors × `imgsz` {640–1280}, no truck/car/bus
+appears (only noise classes); yolov8s likewise; yolov8m only sporadically at conf
+0.11–0.32 and 220–360 ms/frame. COCO trucks are textured photos; the sim's are
+flat-shaded low-poly boxes — a domain gap no amount of threshold tuning closes.
+
+The fix: fine-tune on frames from the sim itself, with **ground truth projected
+straight out of the three.js scene graph** (no human labeling — the simulator knows
+exactly where every truck is):
+
+```bash
+# 1. Collect: run the collector, open http://localhost:5173/?gt=1 for a few minutes
+cd server && source .venv/bin/activate
+python scripts/gt_collect.py /tmp/simtruck-gt/raw.jsonl
+# 2. Convert JSONL → Ultralytics dataset (class 0 = truck)
+python scripts/make_yolo_dataset.py /tmp/simtruck-gt/raw.jsonl /tmp/simtruck-gt/dataset
+# 3. Train (~30 min on Apple MPS)
+python scripts/train_simtruck.py /tmp/simtruck-gt/dataset/simtruck.yaml <run_dir>
+# 4. Deploy (weights are gitignored *.pt — keep them local)
+PARKING_DETECTOR=yolo PARKING_MODEL_NAME=simtruck.pt uvicorn app.main:app --port 8000
+```
+
+Measured on the 2026-09-05 run (511 frames / 2 293 auto-labeled boxes, 453/50 train/val):
+val precision ≈ 0.99, recall ≈ 0.99, mAP50 ≈ 0.995 by epoch 4; live e2e in the sim:
+3–5 trucks per frame at conf 0.95–0.98, HUD `infer` 70–90 ms (imgsz 960, CPU) at
+11 fps capture, bay states flipping FULL/EMPTY as trucks park. Class names are
+resolved from the loaded model's own `names` mapping, so stock COCO models
+(truck = 7) and fine-tuned single-class models (truck = 0) need no config change.
+
+Trade-off to be aware of: the fine-tuned model is a **sim specialist** — near-perfect
+in this domain, weaker than stock COCO weights on real-world photos. That is the
+correct trade for a demo whose camera is this sim; if the scene ever changes
+(assets, camera, palette), regenerate the dataset the same way and retrain (~30 min).
+
 ## Project layout
 
 ```
@@ -160,7 +196,7 @@ The frontend connects to `ws://localhost:8000/ws/detect` by default (override wi
 | **M3 — Frame pipeline** | ✅ Canvas capture + throttling, WS client, overlay rendering of returned boxes, latency HUD. End-to-end with the stub. |
 | **M4 — Real detection** | ✅ YOLOv8n backend with lazy single load, COCO class filter, env-tunable confidence threshold, real latency in the HUD. Verified end-to-end over the WS. |
 | **M5 — Bay occupancy** | ✅ `bays.json` loading, IoU matching, FULL/EMPTY coloring and counts. |
-| **M6 — Tuning & polish** | Threshold tuning, stale-frame handling under load, optional synthetic-data fine-tuning loop (sim ground truth → auto-label → fine-tune YOLO). |
+| **M6 — Tuning & polish** | ✅ Threshold/inference tuning knobs, latest-wins backpressure, synthetic-data fine-tuning (auto-labeled sim ground truth → fine-tuned yolov8n; sim trucks detected at 0.95+ live). |
 
 ## Known considerations
 

@@ -52,6 +52,11 @@ export class TruckSimulator {
     return ids;
   }
 
+  /** Root meshes of all active trucks (used by the `?gt` dataset capture). */
+  truckMeshes(): readonly THREE.Group[] {
+    return this.actors.map((actor) => actor.mesh);
+  }
+
   activeCount(): number {
     return this.actors.length;
   }

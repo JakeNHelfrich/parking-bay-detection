@@ -208,8 +208,10 @@ class YoloDetector:
     - The heavy ``ultralytics`` import and weight load happen on first use —
       never per connection, never per frame. ``ensure_loaded`` lets the app
       lifespan force the load at startup so failures surface on ``/health``.
-    - ``allowed_classes`` are COCO names (default ``["truck"]`` = class 7);
-      they are resolved to class ids up front, without the model.
+    - ``allowed_classes`` are class *names* (e.g. ``["truck"]``), resolved
+      against the loaded model's own ``names`` mapping on load — so both
+      stock COCO models (truck = 7) and fine-tuned single-class models
+      (truck = 0) work with the same configuration.
     - Results are normalized to ``[x, y, w, h]`` in 0..1, top-left origin —
       Ultralytics pixel boxes already use a top-left origin, so this is a
       straight division by frame size, no flip.
@@ -233,13 +235,9 @@ class YoloDetector:
         self._imgsz = imgsz
         self._model_factory = model_factory
         self._model: object | None = None
-
-        classes = allowed_classes if allowed_classes is not None else ["truck"]
-        name_to_id = {name: idx for idx, name in enumerate(COCO_CLASS_NAMES)}
-        unknown = [cls for cls in classes if cls not in name_to_id]
-        if unknown:
-            raise ModelLoadError(f"allowed_classes not in COCO-80: {unknown!r}")
-        self._class_ids = sorted({name_to_id[cls] for cls in classes})
+        self._allowed_classes = list(allowed_classes) if allowed_classes is not None else ["truck"]
+        # Resolved at model load from the model's own names mapping.
+        self._class_ids: list[int] = []
 
     def ensure_loaded(self) -> None:
         """Force the lazy weight load; raises ModelLoadError on failure."""
@@ -253,7 +251,9 @@ class YoloDetector:
                 from ultralytics import YOLO  # noqa: PLC0415
 
                 factory = self._model_factory if self._model_factory is not None else YOLO
-                self._model = factory(self._model_name)
+                model = factory(self._model_name)
+                self._resolve_class_ids(model)
+                self._model = model
             except Exception as exc:
                 if isinstance(exc, ModelLoadError):
                     raise
@@ -261,6 +261,26 @@ class YoloDetector:
                     f"failed to load YOLO model {self._model_name!r}: {exc}"
                 ) from exc
         return self._model
+
+    def _resolve_class_ids(self, model: object) -> None:
+        """Map allowed class names to ids using the loaded model's names.
+
+        Fine-tuned models renumber classes (our sim-truck model has truck=0,
+        not COCO's 7), so the mapping must come from the weights themselves.
+        """
+        names_raw = getattr(model, "names", None)
+        if isinstance(names_raw, list):
+            names: dict[int, str] = dict(enumerate(names_raw))
+        else:
+            names = {int(k): str(v) for k, v in dict(names_raw or {}).items()}
+        name_to_id = {name: idx for idx, name in names.items()}
+        missing = [cls for cls in self._allowed_classes if cls not in name_to_id]
+        if missing:
+            raise ModelLoadError(
+                f"model {self._model_name!r} has no classes {missing!r}; "
+                f"it exposes {sorted(names.values())!r}"
+            )
+        self._class_ids = sorted({name_to_id[cls] for cls in self._allowed_classes})
 
     def infer(self, image: Image.Image, frame_id: int = 0) -> list[Detection]:
         del frame_id  # stateless backend; frame_id is only meaningful to stubs

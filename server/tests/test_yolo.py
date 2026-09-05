@@ -40,10 +40,15 @@ class FakeResult:
 
 
 class FakeModel:
-    """Stands in for ``ultralytics.YOLO``; records predict kwargs."""
+    """Stands in for ``ultralytics.YOLO``; records predict kwargs.
+
+    Carries a COCO-style ``names`` mapping by default, since the detector
+    resolves ``allowed_classes`` against the loaded model's own names.
+    """
 
     def __init__(self, model_name: str) -> None:
         self.model_name = model_name
+        self.names = {7: "truck"}  # COCO ids by default; tests may override
         self.calls: list[dict[str, object]] = []
         self.result: FakeResult | None = None
 
@@ -155,14 +160,18 @@ class TestClassResolution:
         assert fake.calls[0]["classes"] == [7]
 
     def test_multiple_allowed_classes_sorted(self) -> None:
+        # COCO ids: car=2, bus=5, truck=7.
         detector, fake = make_detector(allowed_classes=["truck", "car", "bus"])
+        fake.names = {2: "car", 5: "bus", 7: "truck"}
         image = Image.new("RGB", (64, 48))
         detector.infer(image)
         assert fake.calls[0]["classes"] == [2, 5, 7]
 
-    def test_unknown_class_rejected_at_construction(self) -> None:
-        with pytest.raises(ModelLoadError, match="not in COCO-80"):
-            make_detector(allowed_classes=["semi-truck-lore"])
+    def test_unknown_class_rejected_at_model_load(self) -> None:
+        """Class validation happens against the loaded model's names."""
+        detector, _fake = make_detector(allowed_classes=["semi-truck-lore"])
+        with pytest.raises(ModelLoadError, match="has no classes"):
+            detector.ensure_loaded()
 
 
 class TestInferenceMapping:
@@ -225,6 +234,27 @@ class TestInferenceMapping:
         detector.infer(Image.new("RGB", (64, 48)))
         assert "imgsz" not in fake.calls[0]
 
+    def test_class_ids_resolved_from_model_names(self) -> None:
+        """Fine-tuned models renumber classes: truck=0 must resolve via names."""
+        detector, fake = make_detector()
+        fake.names = {0: "truck"}  # single-class fine-tuned mapping
+        detector.ensure_loaded()
+        detector.infer(Image.new("RGB", (64, 48)))
+        assert fake.calls[0]["classes"] == [0]
+
+    def test_missing_class_name_raises_model_load_error(self) -> None:
+        detector, fake = make_detector()
+        fake.names = {0: "sim_truck"}  # model without a 'truck' class
+        with pytest.raises(ModelLoadError, match="has no classes"):
+            detector.ensure_loaded()
+
+    def test_names_as_list_are_accepted(self) -> None:
+        """Ultralytics sometimes exposes names as a list, not a dict."""
+        detector, fake = make_detector()
+        fake.names = ["background", "truck"]
+        detector.ensure_loaded()
+        assert detector.infer(Image.new("RGB", (64, 48))) == []
+
 
 class TestCreateDetectorYolo:
     def test_yolo_settings_build_lazy_detector(self) -> None:
@@ -264,11 +294,14 @@ class TestCreateDetectorYolo:
         assert detector.model_label == "/models/fine-tuned.pt"
 
     def test_yolo_unknown_class_surfaces_as_model_load_error(self) -> None:
+        """Unknown class names fail at model load (lazily or via ensure_loaded)."""
         settings = SimpleNamespace(
             detector="yolo",
             model_name="",
             allowed_classes=["pickup-truck"],
             confidence_threshold=0.4,
         )
+        detector = create_detector(settings)
+        assert isinstance(detector, YoloDetector)
         with pytest.raises(ModelLoadError):
-            create_detector(settings)
+            detector.ensure_loaded()
