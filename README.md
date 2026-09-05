@@ -257,17 +257,6 @@ fly status               # then open https://<app>.fly.dev
 - `auto_stop_machines = "suspend"` bills nothing while idle; an incoming request wakes it. Active WebSocket sessions keep the machine running.
 - Serving the frontend from FastAPI is controlled by `PARKING_STATIC_DIR` (set to `/srv/static` in the image). If the directory is absent — local dev, tests — nothing is mounted and the frontend runs from the Vite dev server as usual.
 
-## Milestones
-
-| Phase | Deliverable |
-|-------|-------------|
-| **M1 — Simulation** | Three.js scene: ground plane, parking bays, trucks that drive in, park, and leave. Orbit camera. |
-| **M2 — Server skeleton** | FastAPI app with `/health` and `/ws/detect`. YOLO stubbed out (returns canned boxes) so the frontend can be built before the model lands. |
-| **M3 — Frame pipeline** | ✅ Canvas capture + throttling, WS client, overlay rendering of returned boxes, latency surfaced in the UI. End-to-end with the stub. |
-| **M4 — Real detection** | ✅ YOLOv8n backend with lazy single load, COCO class filter, env-tunable confidence threshold, real latency in the health card. Verified end-to-end over the WS. |
-| **M5 — Bay occupancy** | ✅ `bays.json` loading, IoU matching, FULL/EMPTY coloring and counts. |
-| **M6 — Tuning & polish** | ✅ Threshold/inference tuning knobs, latest-wins backpressure, synthetic-data fine-tuning (auto-labeled sim ground truth → fine-tuned yolov8n; sim trucks detected at 0.95+ live). |
-
 ## Known considerations
 
 - **COCO `truck` class** (class 7) covers medium/heavy trucks; pickup-style trucks may partially match `car`. If detection quality is poor on the synthetic scene, fine-tune on frames auto-labeled from the simulation's own ground truth — the sim knows exactly where every truck is.
