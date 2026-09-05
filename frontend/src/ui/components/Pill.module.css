@@ -1,0 +1,53 @@
+/* Pill / status badge — consumes tokens only. */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  border: var(--border-hairline);
+  font-size: var(--text-meta-size);
+  font-weight: var(--text-body-weight);
+  line-height: var(--leading-tight);
+  white-space: nowrap;
+}
+
+.dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+
+/* Healthy / connected: green tint + strong green text, per mockups. */
+.ok {
+  background: var(--color-ok-bg);
+  border-color: transparent;
+  color: var(--color-accent-strong);
+}
+
+.ok .dot {
+  background: var(--color-accent);
+}
+
+/* Occupied / offline: red tint. */
+.danger {
+  background: var(--color-danger-bg);
+  border-color: transparent;
+  color: var(--color-danger-strong);
+}
+
+.danger .dot {
+  background: var(--color-danger);
+}
+
+/* Plain meta pill (e.g. frame counters). */
+.neutral {
+  background: var(--color-surface);
+  color: var(--color-muted);
+}
+
+.neutral .dot {
+  background: var(--color-viewport-muted);
+}

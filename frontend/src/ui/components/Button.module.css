@@ -1,0 +1,55 @@
+/* Button primitive — consumes tokens only (see src/ui/styles/README.md). */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border: none;
+  border-radius: var(--radius-button);
+  font-family: var(--font-sans);
+  font-size: var(--text-body-size);
+  font-weight: var(--text-title-weight);
+  line-height: var(--leading-tight);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast) ease,
+    border-color var(--transition-fast) ease,
+    color var(--transition-fast) ease;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* Dark filled button ("Start simulation" style). */
+.primary {
+  background: var(--color-btn-dark);
+  color: var(--color-on-dark);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--color-btn-dark-hover);
+}
+
+/* Quiet outline button on light surfaces. */
+.ghost {
+  background: var(--color-surface);
+  border: var(--border-hairline);
+  color: var(--color-ink);
+}
+
+.ghost:hover:not(:disabled) {
+  border-color: var(--color-viewport-muted);
+}
+
+.block {
+  width: 100%;
+}

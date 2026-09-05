@@ -1,0 +1,17 @@
+/* Card primitive — consumes tokens only. */
+
+.card {
+  background: var(--color-surface);
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+}
+
+.title {
+  font-size: var(--text-title-size);
+  font-weight: var(--text-title-weight);
+  line-height: var(--leading-tight);
+  color: var(--color-ink);
+  margin-bottom: var(--space-2);
+}
