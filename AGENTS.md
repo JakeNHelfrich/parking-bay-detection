@@ -14,10 +14,18 @@ Full architecture, wire protocol, and milestones: see `README.md`.
 ## Repo layout
 
 ```
-frontend/     Vite + TS + Three.js app (src/scene, src/capture, src/net, src/overlay, src/bays)
+frontend/     Vite + TS + Three.js sim with a React 18 shell (entry src/main.tsx →
+              App.tsx; UI in src/ui, immutable snapshot store in src/state,
+              pipeline glue in src/sim; scene, capture, net, overlay, bays)
 frontend/public/bays.json   Parking bay definitions (normalized rects, editable without code)
 server/       FastAPI app (app/main.py, app/detection.py, app/config.py) + tests/
 ```
+
+### React UI conventions (frontend)
+
+- **The React UI is the HUD.** The overlay canvas draws only detection boxes + bay rects; connection status lives in the header pill, fps/latency in the sidebar health card. Do not draw text status back onto the canvas.
+- **State flows one way**: `src/state/store.ts` holds a single immutable `AppState` snapshot (created at the composition root, not a module singleton); components read it via `useAppState` (`useSyncExternalStore`, `src/state/react.ts`) and act only by dispatching store commands (e.g. `setSimRunning`). The imperative sim loop (`src/sim/bootstrap.ts`) reads `store.getState()` per frame — no subscriptions, no awaits (invariant 2).
+- **UI components are stateless, props-in/elements-out.** Derive everything from the store snapshot; extract pure mapping functions (`pillForStatus`, `inferenceHealth`, `bayLabel`, `bayStatusCopy`) as exported, unit-testable functions. Styling is plain-CSS Modules consuming tokens from `src/ui/styles/tokens.css` — no raw values outside tokens.
 
 ## Commands
 

@@ -72,7 +72,18 @@ By default the server runs a **stub detector** (`PARKING_DETECTOR=stub`) that re
 - Bays are defined in `bays.json` as normalized rectangles (same coordinate space as detections), so bay layout can be tuned without code changes.
 - **Bays are identities, not model output.** A bay's identity is its stable `id` in the bay map; the detector only sees trucks and knows nothing about bays. Occupancy is derived entirely in the frontend by matching truck bboxes against the bay map (`frontend/src/bays/occupancy.ts`). A real-world deployment would replace the hand-authored bay map with a CV calibration pass that persists detected bay rects — the runtime matching layer would not change.
 - A bay is **FULL** when `IoU(truck bbox, bay rect) ≥ threshold` (default `0.3`, see [Threshold tuning measurements](#threshold-tuning-measurements)), or when the truck's bbox center falls inside the bay (configurable strategy).
-- The frontend draws bay outlines colored by state (green = empty, red = full) and a summary count.
+- The frontend draws bay outlines colored by state (green = empty, red = full), and the sidebar lists one card per bay with its live state (`Clear · N% confidence` / `Occupied · truck detected`).
+
+### Frontend UI (React shell)
+
+The UI is a React 18 app mounted over the imperative sim pipeline (`frontend/src/main.tsx` → `App.tsx`):
+
+- **State**: a single immutable-snapshot store (`src/state/store.ts`) created at the composition root; React reads it through `useSyncExternalStore` (`src/state/react.ts`). The render loop reads the latest snapshot per frame — no subscriptions, no awaits (decoupled render/inference).
+- **Header** (`src/ui/AppHeader.tsx`): BAYWATCH brand, connection pill (green "Live feed connected" / red "Live feed offline"), camera chip, Start/Stop control. Restacks to three rows on mobile (<768px).
+- **Sidebar** (`src/ui/`): one card per bay from `bays.json` (identity = bay id, occupancy from frontend matching) plus an **inference health card** (`InferenceHealthCard.tsx`): healthy / degraded / offline from connection status + `latencyMs` (`INFERENCE_HEALTHY_MAX_MS` in `src/config.ts`).
+- **The React UI is the HUD.** The 2D overlay canvas (`src/overlay/overlay.ts`) draws only detection boxes + bay rects; the former canvas HUD (fps/latency text, offline banner) was replaced by the header pill and health card.
+- **Offline/reconnect**: the WebSocket client reconnects with backoff (`src/net/backoff.ts`); while disconnected the sim keeps rendering, the overlay freezes on the last accepted result, and the pill + health card show the offline state until the socket re-opens.
+- **`?gt` dev mode** bypasses the pipeline entirely (no overlay/WS): the sim renders as usual while a secondary loop exports ground-truth JPEG+box pairs (see [Fine-tuning](#fine-tuning-for-the-sim-domain-why-the-weights-are-custom)).
 
 ### Performance & tuning
 
@@ -127,15 +138,15 @@ IoU threshold removes the IoU-only ones (−75%) at a ~6% TP cost that is
 concentrated in the 2.2 s parking/leaving tween (the truck is still
 maneuvering). With the fallback retained, no parked truck is ever missed.
 
-**HUD impact: none.** Both knobs are post-inference filters (server-side
+**Health-card impact: none.** Both knobs are post-inference filters (server-side
 class/conf filter, frontend IoU math), so `inferenceMs` / `latencyMs` /
-`captureFps` are unaffected — live HUD baseline remains 70–90 ms `infer`
+`captureFps` are unaffected — live baseline remains 70–90 ms `infer`
 (imgsz 960, CPU) at ~11 fps capture. Backpressure behavior under load is
 covered by `test_backlog_coalesces_to_latest_frame` (superseded frames are
 skipped server-side, the newest always wins, and the socket stays usable
 after a burst).
 
-Rule of thumb: latency scales ~quadratically with `imgsz`. Raise it only when small objects are being missed; at the default 10–15 fps capture, even 960 keeps end-to-end latency under a second. Benchmark via the HUD's `inferenceMs` before and after any tuning change.
+Rule of thumb: latency scales ~quadratically with `imgsz`. Raise it only when small objects are being missed; at the default 10–15 fps capture, even 960 keeps end-to-end latency under a second. Benchmark via the health card's latency figure (`latencyMs`) before and after any tuning change.
 
 #### Fine-tuning for the sim domain (why the weights are custom)
 
@@ -163,7 +174,7 @@ PARKING_DETECTOR=yolo PARKING_MODEL_NAME=simtruck.pt uvicorn app.main:app --port
 
 Measured on the 2026-09-05 run (511 frames / 2 293 auto-labeled boxes, 453/50 train/val):
 val precision ≈ 0.99, recall ≈ 0.99, mAP50 ≈ 0.995 by epoch 4; live e2e in the sim:
-3–5 trucks per frame at conf 0.95–0.98, HUD `infer` 70–90 ms (imgsz 960, CPU) at
+3–5 trucks per frame at conf 0.95–0.98, health-card latency 70–90 ms (imgsz 960, CPU) at
 11 fps capture, bay states flipping FULL/EMPTY as trucks park. Class names are
 resolved from the loaded model's own `names` mapping, so stock COCO models
 (truck = 7) and fine-tuned single-class models (truck = 0) need no config change.
@@ -179,11 +190,15 @@ correct trade for a demo whose camera is this sim; if the scene ever changes
 parking-bay-detection/
 ├── frontend/               # Vite + TypeScript + Three.js simulation
 │   ├── src/
-│   │   ├── main.ts         # bootstrap, render loop
-│   │   ├── scene/          # three.js scene, trucks, bays, camera
+│   │   ├── main.tsx        # React entry (mounts <App/> into #root)
+│   │   ├── App.tsx         # app shell: header, viewport, sidebar
+│   │   ├── ui/             # React components (AppHeader, bay cards, health card, primitives, tokens)
+│   │   ├── state/          # immutable app-state store + React adapter (useSyncExternalStore)
+│   │   ├── sim/            # mountSim bootstrap: capture → detect → overlay glue
+│   │   ├── scene/          # three.js scene, trucks, bays, camera, ?gt capture
 │   │   ├── capture/        # canvas → JPEG frame capture + throttling
-│   │   ├── net/            # WebSocket client, frame ID bookkeeping
-│   │   ├── overlay/        # 2D canvas overlay (boxes, bay states, HUD)
+│   │   ├── net/            # WebSocket client (reconnect/backoff), frame ID bookkeeping
+│   │   ├── overlay/        # 2D canvas overlay (detection boxes + bay rects only)
 │   │   └── bays/           # bay config loading + occupancy (IoU) logic
 │   ├── public/bays.json    # parking bay definitions (normalized rects)
 │   └── index.html
@@ -248,8 +263,8 @@ fly status               # then open https://<app>.fly.dev
 |-------|-------------|
 | **M1 — Simulation** | Three.js scene: ground plane, parking bays, trucks that drive in, park, and leave. Orbit camera. |
 | **M2 — Server skeleton** | FastAPI app with `/health` and `/ws/detect`. YOLO stubbed out (returns canned boxes) so the frontend can be built before the model lands. |
-| **M3 — Frame pipeline** | ✅ Canvas capture + throttling, WS client, overlay rendering of returned boxes, latency HUD. End-to-end with the stub. |
-| **M4 — Real detection** | ✅ YOLOv8n backend with lazy single load, COCO class filter, env-tunable confidence threshold, real latency in the HUD. Verified end-to-end over the WS. |
+| **M3 — Frame pipeline** | ✅ Canvas capture + throttling, WS client, overlay rendering of returned boxes, latency surfaced in the UI. End-to-end with the stub. |
+| **M4 — Real detection** | ✅ YOLOv8n backend with lazy single load, COCO class filter, env-tunable confidence threshold, real latency in the health card. Verified end-to-end over the WS. |
 | **M5 — Bay occupancy** | ✅ `bays.json` loading, IoU matching, FULL/EMPTY coloring and counts. |
 | **M6 — Tuning & polish** | ✅ Threshold/inference tuning knobs, latest-wins backpressure, synthetic-data fine-tuning (auto-labeled sim ground truth → fine-tuned yolov8n; sim trucks detected at 0.95+ live). |
 
