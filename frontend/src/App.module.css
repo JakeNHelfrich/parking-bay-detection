@@ -1,11 +1,138 @@
-/* Sim host: fills the React root exactly as the former #app container did,
-   so world.ts (contain-fit canvas) and the overlay keep their geometry. */
-.simHost {
+/* BAYWATCH shell — header / viewport / sidebar (design/desktop.png,
+   design/tablet.png, design/mobile.png). Consumes tokens only (see
+   src/ui/styles/README.md); breakpoint values are sampled from the three
+   mockups and live here as local constants (media queries cannot use vars). */
+
+/*
+ * Breakpoints (from the mockups; plain values — media queries cannot use
+ * custom properties):
+ * - desktop: >= 1024px — header + two columns (viewport | 320px sidebar)
+ * - tablet: 768–1023px  — same arrangement, narrower sidebar (280px)
+ * - mobile: < 768px     — single column; viewport panel, then sidebar below
+ */
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+/* --------------------------------------------------------------------- */
+/* Header bar                                                            */
+/* --------------------------------------------------------------------- */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.logoTile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-card);
+  background: var(--color-btn-dark);
+  color: var(--color-on-dark);
+  flex-shrink: 0;
+}
+
+.wordmark {
+  font-size: var(--text-wordmark-size);
+  font-weight: var(--text-wordmark-weight);
+  letter-spacing: var(--text-wordmark-tracking);
+  color: var(--color-ink);
+}
+
+/* --------------------------------------------------------------------- */
+/* Main region: viewport panel + sidebar                                 */
+/* --------------------------------------------------------------------- */
+
+.main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--space-4);
+  min-height: 0; /* let the viewport panel shrink inside the 1fr row */
+}
+
+.viewportPanel {
   position: relative;
-  width: 100%;
-  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--radius-viewport);
+  background: var(--color-viewport);
+}
+
+/* The sim mount point fills the panel; world.ts letterboxes the 16:9 canvas
+   inside it via ResizeObserver on this element. */
+.simHost {
+  position: absolute;
+  inset: 0;
 }
 
 .simHost canvas {
   display: block;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.sidebarHeading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-1) 0;
+}
+
+.sidebarTitle {
+  font-size: var(--text-title-size);
+  font-weight: var(--text-title-weight);
+  color: var(--color-ink);
+}
+
+/* --------------------------------------------------------------------- */
+/* Breakpoints                                                           */
+/* --------------------------------------------------------------------- */
+
+@media (max-width: 1023px) {
+  .main {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+}
+
+@media (max-width: 767px) {
+  .main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Mobile mockup: viewport panel is roughly square; sidebar stacks below. */
+  .viewportPanel {
+    aspect-ratio: 1 / 1;
+  }
+
+  .sidebarHeading {
+    padding-top: 0;
+  }
 }

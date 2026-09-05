@@ -38,6 +38,8 @@ export class Overlay {
   private viewport: PixelRect = { x: 0, y: 0, w: 0, h: 0 };
 
   private readonly container: HTMLElement;
+  /** Observes the container (viewport panel); see constructor. */
+  private readonly resizeObserver: ResizeObserver;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -48,7 +50,16 @@ export class Overlay {
     this.ctx = ctx;
     container.appendChild(this.canvas);
     this.resize();
-    window.addEventListener('resize', () => this.resize());
+    // Observe the container, not the window: the panel can resize without a
+    // window resize (shell layout changes), and normalized coordinates only
+    // make sense against the panel's own pixel size.
+    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver.observe(container);
+  }
+
+  /** Stops observing the container; call before removing the canvas. */
+  dispose(): void {
+    this.resizeObserver.disconnect();
   }
 
   setDetections(message: DetectionsMessage | null): void {

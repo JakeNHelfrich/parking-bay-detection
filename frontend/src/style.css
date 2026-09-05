@@ -1,5 +1,5 @@
-/* Design tokens + base layer load first; rules below keep current behavior
-   (the sim-scene sky backdrop) until the UI shell components land. */
+/* Design tokens + base layer load first; page-level shell rules live in
+   src/App.module.css (the React shell). This file only wires the page root. */
 @import './ui/styles/tokens.css';
 @import './ui/styles/base.css';
 
@@ -8,14 +8,11 @@ body,
 #app {
   margin: 0;
   padding: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: #8ec5e8;
+  min-height: 100%;
 }
 
-#app {
-  position: relative;
+body {
+  background: var(--color-page);
 }
 
 #app canvas {

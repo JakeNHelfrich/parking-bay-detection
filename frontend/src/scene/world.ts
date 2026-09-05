@@ -83,7 +83,11 @@ export function createWorld(container: HTMLElement): World {
     applyRect();
   };
   applyRect();
-  window.addEventListener('resize', onResize);
+  // Observe the container (the viewport panel), not the window: the shell can
+  // resize the panel independently of the window (layout changes, mobile
+  // stacking), and the 16:9 contain-fit letterbox must track the panel only.
+  const observer = new ResizeObserver(onResize);
+  observer.observe(container);
 
   return {
     scene,
@@ -96,7 +100,7 @@ export function createWorld(container: HTMLElement): World {
       renderer.render(scene, camera);
     },
     dispose(): void {
-      window.removeEventListener('resize', onResize);
+      observer.disconnect();
       renderer.dispose();
       renderer.domElement.remove();
     },

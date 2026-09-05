@@ -41,15 +41,15 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
 
   const teardown: Array<() => void> = [];
   const overlay = new Overlay(container);
-  // Overlay's canvas is private (id "overlay"); teardown removes it directly.
-  teardown.push(() => container.querySelector('#overlay')?.remove());
+  teardown.push(() => {
+    overlay.dispose();
+    container.querySelector('#overlay')?.remove();
+  });
 
   // Normalized detections/bays describe the 16:9 scene, which world.ts renders
-  // into a contain-fit letterboxed rect; map overlay pixels through that rect.
-  const syncViewport = (): void => overlay.setViewport(world.viewport);
-  syncViewport();
-  window.addEventListener('resize', syncViewport);
-  teardown.push(() => window.removeEventListener('resize', syncViewport));
+  // into a contain-fit letterboxed rect; the overlay maps pixels through that
+  // rect. world.viewport is re-read every frame (world.ts reassigns the rect
+  // object on panel resize), so no resize listener is needed here.
 
   // --- Detection pipeline (M3) -------------------------------------------------
   // The render loop below stays strictly non-blocking: capture is throttled and
@@ -153,6 +153,9 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
     };
     overlay.setHud(hud);
     store.setHud(hud);
+    // Re-read the fitted rect every frame: world.ts may replace it on panel
+    // resize, and the overlay must always map into the current 16:9 rect.
+    overlay.setViewport(world.viewport);
     overlay.draw();
     rafId = requestAnimationFrame(frame);
   }
