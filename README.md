@@ -186,7 +186,22 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-The frontend connects to `ws://localhost:8000/ws/detect` by default (override with `VITE_DETECT_WS_URL`).
+The frontend connects to `ws://localhost:8000/ws/detect` by default (override with `VITE_DETECT_WS_URL`). When no override is set it derives the URL from the page origin (`wss://<host>/ws/detect` on https), which is what makes single-origin deployments work with zero configuration.
+
+## Deployment (single Fly.io container)
+
+The whole app deploys as one Fly.io machine: a multi-stage `Dockerfile` builds `frontend/dist` (node stage) and serves it from FastAPI at `/` (python stage), so the browser loads the sim and opens `wss://<app>.fly.dev/ws/detect` on the **same origin** — no CORS, no separate frontend hosting, no per-env `VITE_DETECT_WS_URL` build.
+
+```bash
+fly launch --no-deploy   # reads fly.toml; pick a unique app name if taken
+fly deploy
+fly status               # then open https://<app>.fly.dev
+```
+
+- The image bakes in `server/simtruck.pt` and sets `PARKING_DETECTOR=yolo`, `PARKING_MODEL_NAME=/srv/models/simtruck.pt` (weights are in the image, so `/health` never depends on network at boot).
+- Sized `shared-cpu-1x` / 1024 MB (~$4–8/mo): CPU torch + the fine-tuned model want ~700 MB resident. For a stub-detector demo, set `PARKING_DETECTOR=stub` and drop memory to 256 MB in `fly.toml` (~$2/mo).
+- `auto_stop_machines = "suspend"` bills nothing while idle; an incoming request wakes it. Active WebSocket sessions keep the machine running.
+- Serving the frontend from FastAPI is controlled by `PARKING_STATIC_DIR` (set to `/srv/static` in the image). If the directory is absent — local dev, tests — nothing is mounted and the frontend runs from the Vite dev server as usual.
 
 ## Milestones
 

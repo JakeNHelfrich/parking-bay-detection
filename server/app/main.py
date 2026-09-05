@@ -26,10 +26,12 @@ import json
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import Settings, load_settings
 from app.detection import (
@@ -245,3 +247,21 @@ async def ws_detect(socket: WebSocket) -> None:
             continue
 
         await send_json_safe({"type": "error", "message": f"unknown message type: {msg_type!r}"})
+
+
+def _mount_frontend(application: FastAPI) -> None:
+    """Serve the built frontend (if present) from the same origin.
+
+    Single-container deployments (Fly.io) build ``frontend/dist`` into the
+    image at ``settings.static_dir``; this mounts it at ``/`` so one origin
+    serves both the app and ``/ws/detect``. Registered AFTER all routes and
+    the WebSocket so Starlette matches those first — a ``/`` mount would
+    otherwise swallow them. When the directory is absent (local dev, tests)
+    nothing is mounted and the frontend runs from the Vite dev server.
+    """
+    static_dir = Path(settings.static_dir)
+    if static_dir.is_dir():
+        application.mount("/", StaticFiles(directory=static_dir, html=True), name="frontend")
+
+
+_mount_frontend(app)

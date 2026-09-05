@@ -77,6 +77,10 @@ class Settings:
     imgsz: int | None = field(default_factory=lambda: _env_optional_int("PARKING_IMGSZ", None))
     host: str = field(default_factory=lambda: _env_str("PARKING_HOST", "127.0.0.1"))
     port: int = field(default_factory=lambda: _env_int("PARKING_PORT", 8000))
+    # Directory containing the built frontend (frontend/dist) to serve at "/".
+    # Single-container deploys bake the build in here; empty/missing dir means
+    # "not served" (local dev uses the Vite dev server instead).
+    static_dir: str = field(default_factory=lambda: _env_str("PARKING_STATIC_DIR", "static"))
 
 
 def load_settings() -> Settings:

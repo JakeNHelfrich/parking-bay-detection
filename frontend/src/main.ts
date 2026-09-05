@@ -6,6 +6,7 @@ import {
   type DetectionsMessage,
 } from './net/protocol';
 import { isStaleFrame } from './net/stale-frame';
+import { resolveDetectWsUrl } from './net/ws-url';
 import { loadBayLayout } from './bays/bay-defs';
 import { computeBayStates } from './bays/occupancy';
 import { Overlay } from './overlay/overlay';
@@ -48,9 +49,9 @@ function runDemoPipeline(
   // result exists. Stale results (frameId older than the latest captured frame)
   // are dropped, never queued.
 
-  const envUrl: unknown = import.meta.env.VITE_DETECT_WS_URL;
-  const wsUrl =
-    typeof envUrl === 'string' && envUrl.length > 0 ? envUrl : 'ws://localhost:8000/ws/detect';
+  // VITE_DETECT_WS_URL overrides (e.g. dev backend on :8000); otherwise the
+  // client talks to the same origin it was served from (single-container deploys).
+  const wsUrl = resolveDetectWsUrl(import.meta.env.VITE_DETECT_WS_URL, window.location);
 
   const capture = new FrameCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT);
 

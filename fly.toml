@@ -1,0 +1,35 @@
+# Fly.io single-container deployment (frontend + FastAPI/WS in one image).
+#
+# First deploy: `fly launch --no-deploy` (accept defaults, it will read this
+# file), then `fly deploy`. The app name must be globally unique on Fly —
+# change `app` below if the name is taken.
+#
+# Cost note: shared-cpu-1x + 1024MB runs ~$4-8/mo (torch CPU + yolov8n-class
+# weights want ~700MB resident). For a stub-detector demo, drop memory to 256.
+
+app = "parking-bay-detection"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # Detector/model config baked into the image defaults; override here if needed.
+  # PARKING_IMGSZ = "960"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 40
+    hard_limit = 60
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1024mb"
