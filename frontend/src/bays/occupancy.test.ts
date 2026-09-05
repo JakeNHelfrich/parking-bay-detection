@@ -47,6 +47,33 @@ describe('computeBayStates', () => {
     expect(states.find((s) => s.bayId === 1)?.occupied).toBe(false);
   });
 
+  it('carries the matched truck confidence on occupied bays', () => {
+    const truck = { cls: 'truck', conf: 0.98, bbox: [0.12, 0.12, 0.16, 0.16] as const };
+    const states = computeBayStates(bays, [truck]);
+    expect(states.find((s) => s.bayId === 0)).toEqual({
+      bayId: 0,
+      occupied: true,
+      confidence: 0.98,
+    });
+  });
+
+  it('reports no confidence on unmatched bays', () => {
+    const truck = { cls: 'truck', conf: 0.98, bbox: [0.12, 0.12, 0.16, 0.16] as const };
+    const states = computeBayStates(bays, [truck]);
+    const empty = states.find((s) => s.bayId === 1);
+    expect(empty?.confidence).toBeUndefined();
+    expect(Object.hasOwn(empty ?? {}, 'confidence')).toBe(false);
+  });
+
+  it('carries each matched truck confidence in greedy matching', () => {
+    // Two trucks overlapping both bays; greedy best-IoU assigns one each.
+    const t0 = { cls: 'truck', conf: 0.81, bbox: [0.12, 0.12, 0.16, 0.16] as const };
+    const t1 = { cls: 'truck', conf: 0.77, bbox: [0.52, 0.52, 0.16, 0.16] as const };
+    const states = computeBayStates(bays, [t0, t1]);
+    expect(states.find((s) => s.bayId === 0)?.confidence).toBe(0.81);
+    expect(states.find((s) => s.bayId === 1)?.confidence).toBe(0.77);
+  });
+
   it('ignores non-truck classes', () => {
     const car = { cls: 'car', conf: 0.99, bbox: [0.1, 0.1, 0.2, 0.2] as const };
     expect(computeBayStates(bays, [car])).toEqual([

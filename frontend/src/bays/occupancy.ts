@@ -59,6 +59,8 @@ function containsPoint(rect: NormalizedRect, cx: number, cy: number): boolean {
 export interface BayState {
   readonly bayId: number;
   readonly occupied: boolean;
+  /** Confidence of the matched truck detection; undefined when unmatched. */
+  readonly confidence?: number;
 }
 
 /**
@@ -95,15 +97,20 @@ export function computeBayStates(
   });
   candidates.sort((a, b) => b.iou - a.iou);
 
-  const matchedBays = new Set<number>();
+  const matchedTruckByBay = new Map<number, number>();
   const matchedTrucks = new Set<number>();
   for (const candidate of candidates) {
-    if (matchedBays.has(candidate.bayIndex) || matchedTrucks.has(candidate.truckIndex)) continue;
-    matchedBays.add(candidate.bayIndex);
+    if (matchedTruckByBay.has(candidate.bayIndex) || matchedTrucks.has(candidate.truckIndex)) continue;
+    matchedTruckByBay.set(candidate.bayIndex, candidate.truckIndex);
     matchedTrucks.add(candidate.truckIndex);
   }
 
-  return bays.map((bay, index) => ({ bayId: bay.id, occupied: matchedBays.has(index) }));
+  return bays.map((bay, index) => {
+    const truckIndex = matchedTruckByBay.get(index);
+    return truckIndex === undefined
+      ? { bayId: bay.id, occupied: false }
+      : { bayId: bay.id, occupied: true, confidence: trucks[truckIndex].conf };
+  });
 }
 
 /** Number of occupied bays, for the HUD count. */
