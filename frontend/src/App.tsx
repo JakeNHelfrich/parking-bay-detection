@@ -21,6 +21,7 @@ import type { AppStateStore } from './state/store';
 import { mountSim } from './sim/bootstrap';
 import { AppHeader } from './ui/AppHeader';
 import { InferenceHealthCard } from './ui/InferenceHealthCard';
+import { ParkingBaysPanel } from './ui/ParkingBaysPanel';
 import { CameraIcon } from './ui/components';
 import styles from './App.module.css';
 
@@ -40,6 +41,7 @@ function Shell() {
   const simHostRef = useRef<HTMLDivElement>(null);
   const store = useAppStateStore();
   const simRunning = useAppState((state) => state.simRunning);
+  const bayLayout = useAppState((state) => state.bayLayout);
 
   useEffect(() => {
     const host = simHostRef.current;
@@ -58,8 +60,10 @@ function Shell() {
         <aside className={styles.sidebar} aria-label="Parking bays">
           <div className={styles.sidebarHeading}>
             <h2 className={styles.sidebarTitle}>Parking bays</h2>
+            {/* N derives from bays.json at runtime — no code change to re-bay. */}
+            <span className={styles.sidebarMeta}>{bayLayout?.bays.length ?? 0} monitored</span>
           </div>
-          {/* Bay cards are wired to the store in a later bead. */}
+          <ParkingBaysPanel />
           <InferenceHealthCard />
         </aside>
       </main>

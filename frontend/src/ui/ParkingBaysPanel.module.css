@@ -1,0 +1,27 @@
+/* ParkingBaysPanel — stacked per-bay cards per design/desktop.png.
+   All raw values come from tokens (see src/ui/styles/README.md). */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.bayCard {
+  padding: var(--space-3) var(--space-4);
+}
+
+.bayTitle {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-title-size);
+  font-weight: var(--text-title-weight);
+  line-height: var(--leading-tight);
+  color: var(--color-ink);
+}
+
+.bayStatus {
+  margin: 0;
+  font-size: var(--text-body-size);
+  line-height: var(--leading-normal);
+  color: var(--color-muted);
+}
