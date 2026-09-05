@@ -1,7 +1,7 @@
 import type { BayDef } from '../bays/bay-defs';
 import type { BayState } from '../bays/occupancy';
 import type { ConnectionStatus } from '../net/detect-client';
-import { bboxToPixelRect } from './coords';
+import { bboxToPixelRect, type PixelRect } from './coords';
 import type { DetectionsMessage } from '../net/protocol';
 
 const BOX_COLOR = '#ffb020';
@@ -34,6 +34,8 @@ export class Overlay {
   private stats: HudStats = { frameId: null, latencyMs: null, inferenceMs: null, captureFps: 0 };
   private bays: readonly BayDef[] = [];
   private bayStates: readonly BayState[] = [];
+  /** Fitted 16:9 scene rect inside the container; normalized coords map here. */
+  private viewport: PixelRect = { x: 0, y: 0, w: 0, h: 0 };
 
   private readonly container: HTMLElement;
 
@@ -71,6 +73,11 @@ export class Overlay {
     this.bayStates = states;
   }
 
+  /** Installs the fitted 16:9 scene rect that normalized coordinates map into. */
+  setViewport(viewport: PixelRect): void {
+    this.viewport = viewport;
+  }
+
   resize(): void {
     this.canvas.width = this.container.clientWidth;
     this.canvas.height = this.container.clientHeight;
@@ -81,18 +88,18 @@ export class Overlay {
   draw(): void {
     const { width, height } = this.canvas;
     this.ctx.clearRect(0, 0, width, height);
-    this.drawBays(width, height);
-    this.drawDetections(width, height);
+    this.drawBays();
+    this.drawDetections();
     this.drawHud();
   }
 
-  private drawBays(width: number, height: number): void {
+  private drawBays(): void {
     if (this.bays.length === 0) return;
     const occupiedById = new Map(this.bayStates.map((state) => [state.bayId, state.occupied]));
     this.ctx.font = FONT;
     for (const bay of this.bays) {
       const occupied = occupiedById.get(bay.id) ?? false;
-      const rect = bboxToPixelRect(bay.rect, width, height);
+      const rect = bboxToPixelRect(bay.rect, this.viewport);
       this.ctx.strokeStyle = occupied ? BAY_FULL_COLOR : BAY_EMPTY_COLOR;
       this.ctx.lineWidth = 2;
       this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
@@ -105,12 +112,12 @@ export class Overlay {
     }
   }
 
-  private drawDetections(width: number, height: number): void {
+  private drawDetections(): void {
     const message = this.latest;
     if (message === null) return;
     this.ctx.font = FONT;
     for (const det of message.detections) {
-      const rect = bboxToPixelRect(det.bbox, width, height);
+      const rect = bboxToPixelRect(det.bbox, this.viewport);
       this.ctx.strokeStyle = BOX_COLOR;
       this.ctx.lineWidth = 2;
       this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);

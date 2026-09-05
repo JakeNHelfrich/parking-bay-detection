@@ -21,6 +21,12 @@ const bays = createBayField(world.scene);
 const simulator = new TruckSimulator(world.scene, bays);
 const overlay = new Overlay(container);
 
+// Normalized detections/bays describe the 16:9 scene, which world.ts renders
+// into a contain-fit letterboxed rect; map overlay pixels through that rect.
+const syncViewport = (): void => overlay.setViewport(world.viewport);
+syncViewport();
+window.addEventListener('resize', syncViewport);
+
 // --- Detection pipeline (M3) -------------------------------------------------
 // The render loop below stays strictly non-blocking: capture is throttled and
 // fire-and-forget, WS sends never await, and the overlay draws whatever latest

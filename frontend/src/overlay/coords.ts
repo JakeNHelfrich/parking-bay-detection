@@ -13,19 +13,22 @@ export interface PixelRect {
  * (top-left). Both spaces share a top-left origin, so this is a direct
  * scale — deliberately NO y-flip. Three.js's bottom-left origin is confined
  * to the scene layer and never reaches normalized coordinates or pixels.
- * Display size (not capture size) is used here, so window resizes only
- * affect this multiplication.
+ *
+ * `viewport` is the fitted 16:9 rect of the WebGL canvas inside the container
+ * (see world.ts): normalized coordinates describe the rendered scene, which
+ * occupies exactly that rect — NOT the full container when the window aspect
+ * differs from 16:9. Mapping through the viewport keeps boxes and bays
+ * aligned at any window size.
  */
 export function bboxToPixelRect(
   bbox: readonly [number, number, number, number],
-  displayWidth: number,
-  displayHeight: number,
+  viewport: PixelRect,
 ): PixelRect {
   const [nx, ny, nw, nh] = bbox;
   return {
-    x: nx * displayWidth,
-    y: ny * displayHeight,
-    w: nw * displayWidth,
-    h: nh * displayHeight,
+    x: viewport.x + nx * viewport.w,
+    y: viewport.y + ny * viewport.h,
+    w: nw * viewport.w,
+    h: nh * viewport.h,
   };
 }
