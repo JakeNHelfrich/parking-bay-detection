@@ -1,6 +1,8 @@
 /**
- * InferenceHealthCard — the sidebar "Inference healthy" banner per
- * design/desktop.png: pulse icon + health label + fps/latency stats.
+ * InferenceStatus — the header inference-health pill (bead: move inference
+ * health to the top bar). Sits in the header's meta row next to the
+ * live-feed pill so both health signals read as one status cluster; it
+ * replaces the former sidebar "Inference healthy" card.
  *
  * App-level component consuming the store (connection status + HUD stats).
  * Health mapping is pure and exported for tests:
@@ -8,14 +10,18 @@
  * - `degraded` — no inference results yet, or latency above
  *                INFERENCE_HEALTHY_MAX_MS
  * - `healthy`  — online with a recent low-latency result
+ *
+ * Rendered with the shared Pill primitive (same styling as the live-feed
+ * pill): healthy -> ok green, offline -> danger red, degraded -> neutral
+ * gray (muted, per the tokens — there is no warning color).
  */
 
 import { useAppState } from '../state/react';
 import type { ConnectionStatus } from '../net/detect-client';
 import type { HudStats } from '../state/store';
 import { INFERENCE_HEALTHY_MAX_MS } from '../config';
-import { Card, PulseIcon } from './components';
-import styles from './InferenceHealthCard.module.css';
+import { Pill } from './components';
+import type { PillProps } from './components';
 
 export type InferenceHealth = 'healthy' | 'degraded' | 'offline';
 
@@ -37,27 +43,26 @@ const HEALTH_LABEL: Record<InferenceHealth, string> = {
 };
 
 /** "11 fps · 84.2 ms" — dash placeholders before the first result. */
-function formatStats(hud: HudStats): string {
+export function formatStats(hud: HudStats): string {
   const fps = `${hud.captureFps.toFixed(0)} fps`;
   const latency = hud.latencyMs === null ? '—' : `${hud.latencyMs.toFixed(1)} ms`;
   return `${fps} · ${latency}`;
 }
 
-export function InferenceHealthCard() {
+/** Health -> Pill tone: green healthy, red offline, muted gray degraded. */
+export function toneForHealth(health: InferenceHealth): PillProps['tone'] {
+  if (health === 'healthy') return 'ok';
+  return health === 'offline' ? 'danger' : 'neutral';
+}
+
+export function InferenceStatus() {
   const status = useAppState((state) => state.connectionStatus);
   const hud = useAppState((state) => state.hud);
   const health = inferenceHealth(status, hud);
 
   return (
-    <Card
-      className={[styles.card, styles[health]].filter(Boolean).join(' ')}
-      role="status"
-    >
-      <h3 className={styles.head}>
-        <PulseIcon size={14} />
-        {HEALTH_LABEL[health]}
-      </h3>
-      <p className={styles.stats}>{formatStats(hud)}</p>
-    </Card>
+    <Pill tone={toneForHealth(health)} ariaLabel={HEALTH_LABEL[health]}>
+      {`${HEALTH_LABEL[health]} · ${formatStats(hud)}`}
+    </Pill>
   );
 }

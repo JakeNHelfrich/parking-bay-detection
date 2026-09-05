@@ -20,7 +20,6 @@ import { AppStateProvider, useAppState, useAppStateStore } from './state/react';
 import type { AppStateStore } from './state/store';
 import { mountSim } from './sim/bootstrap';
 import { AppHeader } from './ui/AppHeader';
-import { InferenceHealthCard } from './ui/InferenceHealthCard';
 import { ParkingBaysPanel } from './ui/ParkingBaysPanel';
 import { CameraIcon } from './ui/components';
 import styles from './App.module.css';
@@ -64,7 +63,6 @@ function Shell() {
             <span className={styles.sidebarMeta}>{bayLayout?.bays.length ?? 0} monitored</span>
           </div>
           <ParkingBaysPanel />
-          <InferenceHealthCard />
         </aside>
       </main>
     </div>

@@ -1,7 +1,8 @@
 /**
- * InferenceHealthCard tests (bead: inference health card). Covers the
- * acceptance criterion "health states unit-tested": the pure health mapping
- * across all three states plus render checks via react-dom/server.
+ * InferenceStatus tests (bead: move inference health to the top bar). Covers
+ * the pure health mapping across all three states plus render checks via
+ * react-dom/server. The component renders as a header Pill sharing the
+ * live-feed pill styling; the former sidebar card is retired.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -9,7 +10,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createAppStateStore, type AppStateStore, type HudStats } from '../state/store';
 import { AppStateProvider } from '../state/react';
-import { inferenceHealth, InferenceHealthCard } from './InferenceHealthCard';
+import { formatStats, inferenceHealth, InferenceStatus, toneForHealth } from './InferenceStatus';
 
 const healthyHud: HudStats = { frameId: 42, latencyMs: 84, inferenceMs: 71, captureFps: 11 };
 const degradedHud: HudStats = { frameId: 42, latencyMs: 350, inferenceMs: 300, captureFps: 4 };
@@ -20,7 +21,7 @@ function renderWithStore(store: AppStateStore): string {
     // AppStateProvider requires children in its props object (createElement).
     createElement(AppStateProvider, {
       store,
-      children: createElement(InferenceHealthCard),
+      children: createElement(InferenceStatus),
     }),
   );
 }
@@ -42,17 +43,30 @@ describe('inferenceHealth', () => {
   });
 });
 
-describe('InferenceHealthCard', () => {
-  it('renders the healthy state with fps and latency stats', () => {
+describe('formatStats', () => {
+  it('formats fps and latency with a dash before the first result', () => {
+    expect(formatStats(healthyHud)).toBe('11 fps · 84.0 ms');
+    expect(formatStats(noDataHud)).toBe('0 fps · —');
+  });
+});
+
+describe('toneForHealth', () => {
+  it('maps healthy to ok, offline to danger, degraded to neutral', () => {
+    expect(toneForHealth('healthy')).toBe('ok');
+    expect(toneForHealth('offline')).toBe('danger');
+    expect(toneForHealth('degraded')).toBe('neutral');
+  });
+});
+
+describe('InferenceStatus', () => {
+  it('renders the healthy label with fps and latency stats', () => {
     const store = createAppStateStore();
     store.setConnectionStatus('online');
     store.setHud(healthyHud);
     const html = renderWithStore(store);
     expect(html).toContain('Inference healthy');
-    expect(html).toContain('11 fps'); // captureFps.toFixed(0)
+    expect(html).toContain('11 fps');
     expect(html).toContain('84.0 ms');
-    const cardClass = html.match(/class="([^"]*)"/) ?? ['', ''];
-    expect(cardClass[1]).toContain('healthy');
   });
 
   it('renders the degraded state while there is no data yet', () => {
@@ -60,8 +74,8 @@ describe('InferenceHealthCard', () => {
     expect(html).toContain('Inference degraded');
     expect(html).toContain('0 fps');
     expect(html).toContain('—');
-    const cardClass = html.match(/class="([^"]*)"/) ?? ['', ''];
-    expect(cardClass[1]).toContain('degraded');
+    const pillClass = html.match(/class="([^"]*)"[^>]*role="status"/) ?? ['', ''];
+    expect(pillClass[1]).toContain('neutral');
   });
 
   it('renders the offline state when the store reports offline', () => {
@@ -69,7 +83,7 @@ describe('InferenceHealthCard', () => {
     store.setConnectionStatus('offline');
     const html = renderWithStore(store);
     expect(html).toContain('Inference offline');
-    const cardClass = html.match(/class="([^"]*)"/) ?? ['', ''];
-    expect(cardClass[1]).toContain('offline');
+    const pillClass = html.match(/class="([^"]*)"[^>]*role="status"/) ?? ['', ''];
+    expect(pillClass[1]).toContain('danger');
   });
 });

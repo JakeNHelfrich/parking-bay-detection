@@ -47,11 +47,14 @@
   gap: var(--space-3);
 }
 
-/* Pill + camera chip sub-row; visual no-op on desktop, restacks on mobile. */
+/* Pill + camera chip sub-row; visual no-op on desktop, restacks on mobile.
+   Wraps so the live-feed pill, inference pill, and chip still fit on
+   narrow phones even as one logical row. */
 .metaRow {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
 }
 
 /* Camera chip: the ghost Button primitive with an icon + fixed label. */

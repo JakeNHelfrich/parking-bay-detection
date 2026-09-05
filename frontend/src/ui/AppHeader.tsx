@@ -13,6 +13,7 @@ import { useAppState, useAppStateStore } from '../state/react';
 import type { ConnectionStatus } from '../net/detect-client';
 import { CAMERA_ID } from '../config';
 import { Button, CameraIcon, LogoMark, Pill } from './components';
+import { InferenceStatus } from './InferenceStatus';
 import styles from './AppHeader.module.css';
 
 /**
@@ -53,6 +54,9 @@ export function AppHeader() {
             one row. */}
         <div className={styles.metaRow}>
           <Pill tone={pill.tone}>{pill.label}</Pill>
+          {/* Inference health lives in the header too (bead: move inference
+              health to top bar) so both status signals form one cluster. */}
+          <InferenceStatus />
           <Button variant="ghost" className={styles.chip} aria-label={`Camera ${CAMERA_ID}`}>
             <CameraIcon size={15} />
             {CAMERA_ID}

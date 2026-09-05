@@ -79,9 +79,9 @@ By default the server runs a **stub detector** (`PARKING_DETECTOR=stub`) that re
 The UI is a React 18 app mounted over the imperative sim pipeline (`frontend/src/main.tsx` → `App.tsx`):
 
 - **State**: a single immutable-snapshot store (`src/state/store.ts`) created at the composition root; React reads it through `useSyncExternalStore` (`src/state/react.ts`). The render loop reads the latest snapshot per frame — no subscriptions, no awaits (decoupled render/inference).
-- **Header** (`src/ui/AppHeader.tsx`): BAYWATCH brand, connection pill (green "Live feed connected" / red "Live feed offline"), camera chip, Start/Stop control. Restacks to three rows on mobile (<768px).
-- **Sidebar** (`src/ui/`): one card per bay from `bays.json` (identity = bay id, occupancy from frontend matching) plus an **inference health card** (`InferenceHealthCard.tsx`): healthy / degraded / offline from connection status + `latencyMs` (`INFERENCE_HEALTHY_MAX_MS` in `src/config.ts`).
-- **The React UI is the HUD.** The 2D overlay canvas (`src/overlay/overlay.ts`) draws only detection boxes + bay rects; the former canvas HUD (fps/latency text, offline banner) was replaced by the header pill and health card.
+- **Header** (`src/ui/AppHeader.tsx`): BAYWATCH brand, connection pill (green "Live feed connected" / red "Live feed offline"), inference health pill (`InferenceStatus.tsx`: healthy / degraded / offline from connection status + `latencyMs`, `INFERENCE_HEALTHY_MAX_MS` in `src/config.ts`, with live fps/latency stats) — both status pills form one cluster in the header meta row — plus the camera chip and Start/Stop control. Restacks on mobile (<768px).
+- **Sidebar** (`src/ui/`): one card per bay from `bays.json` (identity = bay id, occupancy from frontend matching), color-coded by state (green clear / red occupied / gray no-data).
+- **The React UI is the HUD.** The 2D overlay canvas (`src/overlay/overlay.ts`) draws only detection boxes + bay rects; the former canvas HUD (fps/latency text, offline banner) was replaced by the header status pills.
 - **Offline/reconnect**: the WebSocket client reconnects with backoff (`src/net/backoff.ts`); while disconnected the sim keeps rendering, the overlay freezes on the last accepted result, and the pill + health card show the offline state until the socket re-opens.
 - **`?gt` dev mode** bypasses the pipeline entirely (no overlay/WS): the sim renders as usual while a secondary loop exports ground-truth JPEG+box pairs (see [Fine-tuning](#fine-tuning-for-the-sim-domain-why-the-weights-are-custom)).
 
