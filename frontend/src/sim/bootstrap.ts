@@ -26,7 +26,9 @@ import { initGroundTruthCapture, isGroundTruthMode } from '../scene/gt';
 import type { AppStateStore } from '../state/store';
 
 export function mountSim(container: HTMLElement, store: AppStateStore): () => void {
-  store.setSimRunning(true);
+  // Sim lifecycle (bead 6kh): the store's `simRunning` starts false; the UI
+  // toggles it. The pipeline below reads the latest snapshot every frame, so
+  // no subscription is needed here and the render loop stays decoupled.
   const world = createWorld(container);
   const bays = createBayField(world.scene);
   const simulator = new TruckSimulator(world.scene, bays);
@@ -117,6 +119,10 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
 
   /** Captures + sends at the throttle rate. Never blocks the render loop. */
   function maybeCaptureAndSend(now: number): void {
+    // Sim lifecycle: frames are captured/sent only while the sim is running.
+    // Reading the immutable snapshot here keeps capture decoupled from the UI
+    // (invariant 2) — no awaits, no UI dependency, just a boolean read.
+    if (!store.getState().simRunning) return;
     const frameId = latestFrameId + 1;
     const pending = capture.capture(world.domElement, frameId, now);
     if (pending === null) return; // throttled or previous capture still in flight
@@ -141,7 +147,11 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
   function frame(now: number): void {
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
-    simulator.update(dt);
+    // Sim lifecycle: trucks only spawn/move while running; the world keeps
+    // rendering (letterbox, overlay, HUD) so the shell stays alive.
+    if (store.getState().simRunning) {
+      simulator.update(dt);
+    }
     world.render();
     maybeCaptureAndSend(now);
     tickFps(now);

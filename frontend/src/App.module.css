@@ -91,6 +91,46 @@
   display: block;
 }
 
+/* "Simulator view ready" placeholder (bead 6kh) — sits above the sim host,
+   removed from the tree by App.tsx once simRunning flips true. */
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  text-align: center;
+  padding: var(--space-6);
+}
+
+.placeholderIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 9999px;
+  background: var(--color-viewport-muted);
+  color: var(--color-on-dark);
+}
+
+.placeholderHeadline {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-on-dark);
+}
+
+.placeholderCopy {
+  margin: 0;
+  max-width: 46rem;
+  font-size: var(--text-body-size);
+  line-height: 1.55;
+  color: var(--color-viewport-muted);
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;
