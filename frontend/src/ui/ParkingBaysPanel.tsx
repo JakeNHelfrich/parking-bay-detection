@@ -16,6 +16,12 @@ import type { BayState } from '../bays/occupancy';
 import { Card } from './components';
 import styles from './ParkingBaysPanel.module.css';
 
+const toneStyles = {
+  occupied: styles.bayCardOccupied,
+  clear: styles.bayCardClear,
+  unknown: styles.bayCardUnknown,
+} as const;
+
 /** Pure label formatter: bayId 0 -> "Bay 01" (1-based, zero-padded). */
 export function bayLabel(bayId: number): string {
   return `Bay ${String(bayId + 1).padStart(2, '0')}`;
@@ -27,6 +33,17 @@ export function bayStatusCopy(state: BayState): string {
   const pct =
     state.confidence === undefined ? '—' : `${Math.round(state.confidence * 100)}%`;
   return `Clear · ${pct} confidence`;
+}
+
+/** Bay-card accent tone, mirroring the overlay color language
+ *  (red FULL / green EMPTY). Any bay present in `bayStates` is live
+ *  (computeBayStates emits one state per bay; empty bays just carry no
+ *  confidence — hence the "—" copy); a missing entry is stale/no-data. */
+export type BayTone = 'occupied' | 'clear' | 'unknown';
+
+export function bayTone(state: BayState | undefined): BayTone {
+  if (state === undefined) return 'unknown';
+  return state.occupied ? 'occupied' : 'clear';
 }
 
 export function ParkingBaysPanel() {
@@ -43,8 +60,12 @@ export function ParkingBaysPanel() {
       {bays.map((bay) => {
         const state = stateById.get(bay.id);
         const fallback: BayState = { bayId: bay.id, occupied: false };
+        const tone = bayTone(state);
         return (
-          <Card key={bay.id} className={styles.bayCard}>
+          <Card
+            key={bay.id}
+            className={[styles.bayCard, toneStyles[tone]].filter(Boolean).join(' ')}
+          >
             <h3 className={styles.bayTitle}>{bayLabel(bay.id)}</h3>
             <p className={styles.bayStatus}>{bayStatusCopy(state ?? fallback)}</p>
           </Card>

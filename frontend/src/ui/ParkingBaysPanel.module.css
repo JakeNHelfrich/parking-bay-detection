@@ -9,6 +9,24 @@
 
 .bayCard {
   padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--color-border);
+}
+
+/* Occupancy-state accents, mirroring the overlay color language
+   (red FULL / green EMPTY); gray for stale/no-data bays. */
+.bayCardOccupied {
+  border-left-color: var(--color-danger);
+  background: var(--color-danger-bg);
+}
+
+.bayCardClear {
+  border-left-color: var(--color-ok);
+  background: var(--color-ok-bg);
+}
+
+.bayCardUnknown {
+  border-left-color: var(--color-muted);
+  background: var(--color-page);
 }
 
 .bayTitle {

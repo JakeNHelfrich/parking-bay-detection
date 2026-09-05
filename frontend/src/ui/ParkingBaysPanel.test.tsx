@@ -10,7 +10,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createAppStateStore, type AppStateStore } from '../state/store';
 import { AppStateProvider } from '../state/react';
 import type { BayLayout } from '../bays/bay-defs';
-import { bayLabel, bayStatusCopy, ParkingBaysPanel } from './ParkingBaysPanel';
+import { bayLabel, bayStatusCopy, bayTone, ParkingBaysPanel } from './ParkingBaysPanel';
 
 const layout: BayLayout = {
   version: 1,
@@ -58,6 +58,21 @@ describe('bayStatusCopy', () => {
   });
 });
 
+describe('bayTone', () => {
+  it('maps occupied bays to the occupied (danger) tone', () => {
+    expect(bayTone({ bayId: 1, occupied: true, confidence: 0.87 })).toBe('occupied');
+  });
+
+  it('maps any present empty-bay state to the clear (ok) tone, with or without confidence', () => {
+    expect(bayTone({ bayId: 0, occupied: false, confidence: 0.98 })).toBe('clear');
+    expect(bayTone({ bayId: 0, occupied: false })).toBe('clear'); // "—" copy is still live data
+  });
+
+  it('maps missing state entries (stale/no data) to the unknown tone', () => {
+    expect(bayTone(undefined)).toBe('unknown');
+  });
+});
+
 describe('ParkingBaysPanel', () => {
   it('renders one card per bay in bays.json order, using bay ids for identity', () => {
     const store = createAppStateStore();
@@ -91,5 +106,20 @@ describe('ParkingBaysPanel', () => {
   it('renders nothing when the bay layout has not loaded', () => {
     const html = renderWithStore(createAppStateStore());
     expect(html).not.toContain('Bay 01');
+  });
+
+  it('color-codes cards by occupancy state (occupied / clear / unknown tones)', () => {
+    const store = createAppStateStore();
+    store.setBayLayout(layout);
+    store.setBayStates([
+      { bayId: 0, occupied: true, confidence: 0.9 }, // occupied
+      { bayId: 1, occupied: false, confidence: 0.95 }, // clear
+      // id 7 absent -> unknown fallback
+    ]);
+    const html = renderWithStore(store);
+    const cardClasses = [...html.matchAll(/class="([^"]*card[^"]*)"/g)].map((m) => m[1]);
+    expect(cardClasses.some((c) => /bayCardOccupied/.test(c))).toBe(true);
+    expect(cardClasses.some((c) => /bayCardClear/.test(c))).toBe(true);
+    expect(cardClasses.some((c) => /bayCardUnknown/.test(c))).toBe(true);
   });
 });
