@@ -17,8 +17,16 @@ export interface NormalizedRect {
   readonly h: number;
 }
 
-/** Minimum IoU between a truck bbox and a bay rect to call the bay FULL. */
-export const OCCUPANCY_IOU_THRESHOLD = 0.2;
+/**
+ * Minimum IoU between a truck bbox and a bay rect to call the bay FULL.
+ *
+ * Tuned (parking-bay-detection-cfr.1) against 503 recorded sim frames: at
+ * 0.2, drive-through trucks generated 111 spurious bay-trigger frames; at
+ * 0.3 they drop to 28 (−75%) while parked trucks still fill their bay via
+ * IoU or the center fallback (no new false negatives). See README
+ * "Threshold tuning measurements".
+ */
+export const OCCUPANCY_IOU_THRESHOLD = 0.3;
 
 /**
  * Bays grow by this margin (normalized units per edge) when matching, so a

@@ -71,7 +71,7 @@ By default the server runs a **stub detector** (`PARKING_DETECTOR=stub`) that re
 
 - Bays are defined in `bays.json` as normalized rectangles (same coordinate space as detections), so bay layout can be tuned without code changes.
 - **Bays are identities, not model output.** A bay's identity is its stable `id` in the bay map; the detector only sees trucks and knows nothing about bays. Occupancy is derived entirely in the frontend by matching truck bboxes against the bay map (`frontend/src/bays/occupancy.ts`). A real-world deployment would replace the hand-authored bay map with a CV calibration pass that persists detected bay rects — the runtime matching layer would not change.
-- A bay is **FULL** when `IoU(truck bbox, bay rect) ≥ threshold` (default `0.2`), or when the truck's bbox center falls inside the bay (configurable strategy).
+- A bay is **FULL** when `IoU(truck bbox, bay rect) ≥ threshold` (default `0.3`, see [Threshold tuning measurements](#threshold-tuning-measurements)), or when the truck's bbox center falls inside the bay (configurable strategy).
 - The frontend draws bay outlines colored by state (green = empty, red = full) and a summary count.
 
 ### Performance & tuning
@@ -95,6 +95,45 @@ Measured inference latency (yolov8n, CPU, Apple Silicon, Ultralytics `bus.jpg`, 
 | 640 (default) | ~34 ms | 4 |
 | 960 | ~80 ms | 5 |
 | 1280 | ~128 ms | 7 |
+
+#### Threshold tuning measurements
+
+Measured (2026-09-05) against the ground-truth dataset used for fine-tuning
+(503 frames / 2 293 projected truck boxes), running `simtruck.pt` offline and
+replaying the frontend occupancy rule per frame. Ground truth: a bay is
+occupied while a truck is parked in it (≥ ~3 s of continuous coverage);
+shorter trigger runs are drive-throughs.
+
+**Confidence threshold — keep 0.35.** `simtruck.pt` true positives: 2 264 at
+conf 0.43–0.98 (median 0.96); noise detections: 9, all conf ≤ 0.67 and all
+far from bays — **zero** occupancy-relevant false positives at 0.35. Raising
+the threshold only trades real trucks for noise: at 0.5, 3 true positives
+(each one a false-empty bay) are lost to remove 8 detections that never
+triggered a bay anyway. Any threshold in [0.35, 0.5] is occupancy-equivalent
+here; 0.35 keeps the largest margin under the true-positive band.
+
+**Bay IoU threshold — 0.2 → 0.3.** Replaying the occupancy rule
+(IoU ≥ thr OR truck center in margin-grown bay rect) per frame:
+
+| Rule | Parked-truck frames (TP) | Drive-through trigger frames (FP) |
+| --- | --- | --- |
+| IoU ≥ 0.2 + center | 1 154 | 111 |
+| IoU ≥ 0.3 + center | 1 085 | **28** |
+| IoU ≥ 0.3, no center | 1 034 | 4 |
+
+The center fallback (kept — it covers parked trucks whose bbox outgrows the
+bay rect) is the source of most drive-through false positives; raising the
+IoU threshold removes the IoU-only ones (−75%) at a ~6% TP cost that is
+concentrated in the 2.2 s parking/leaving tween (the truck is still
+maneuvering). With the fallback retained, no parked truck is ever missed.
+
+**HUD impact: none.** Both knobs are post-inference filters (server-side
+class/conf filter, frontend IoU math), so `inferenceMs` / `latencyMs` /
+`captureFps` are unaffected — live HUD baseline remains 70–90 ms `infer`
+(imgsz 960, CPU) at ~11 fps capture. Backpressure behavior under load is
+covered by `test_backlog_coalesces_to_latest_frame` (superseded frames are
+skipped server-side, the newest always wins, and the socket stays usable
+after a burst).
 
 Rule of thumb: latency scales ~quadratically with `imgsz`. Raise it only when small objects are being missed; at the default 10–15 fps capture, even 960 keeps end-to-end latency under a second. Benchmark via the HUD's `inferenceMs` before and after any tuning change.
 

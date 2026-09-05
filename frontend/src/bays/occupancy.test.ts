@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BayDef } from './bay-defs';
 import {
   BAY_RECT_MARGIN,
+  OCCUPANCY_IOU_THRESHOLD,
   countOccupied,
   computeBayStates,
   rectIoU,
@@ -83,15 +84,17 @@ describe('computeBayStates', () => {
   });
 
   it('never lets one truck fill two bays (greedy best-IoU matching)', () => {
-    // A wide truck spanning both bays: only the best-overlap bay becomes FULL.
-    const wideTruck = { cls: 'truck', conf: 0.9, bbox: [0.1, 0.1, 0.7, 0.2] as const };
-    const states = computeBayStates(bays, [wideTruck]);
+    // A wide truck overlapping two side-by-side bays above the 0.3 threshold:
+    // only the best-overlap bay becomes FULL (IoU 0.353 vs 0.342).
+    const sideBySide = [bay(0, [0.1, 0.1, 0.2, 0.2]), bay(1, [0.4, 0.1, 0.2, 0.2])];
+    const wideTruck = { cls: 'truck', conf: 0.9, bbox: [0.1, 0.1, 0.5, 0.25] as const };
+    const states = computeBayStates(sideBySide, [wideTruck]);
     expect(countOccupied(states)).toBe(1);
   });
 
   it('matches by bbox center falling inside the margin-grown bay rect', () => {
     // Tall, narrow truck overhanging the bay: IoU with bay 0 is ≈ 0.11
-    // (below the 0.2 threshold), but the bbox center (0.205, 0.30) still
+    // (below the 0.3 threshold), but the bbox center (0.205, 0.30) still
     // falls inside bay 0's margin-grown rect (y reaches 0.305) → FULL via
     // the center fallback.
     const tallTruck = { cls: 'truck', conf: 0.9, bbox: [0.19, 0.05, 0.02, 0.5] as const };
@@ -105,6 +108,31 @@ describe('computeBayStates', () => {
     const truck = { cls: 'truck', conf: 0.9, bbox: [0.31, 0.29, 0.04, 0.04] as const };
     const states = computeBayStates(bays, [truck]);
     expect(states.find((s) => s.bayId === 0)?.occupied).toBe(false);
+  });
+
+  it('ignores a passing truck whose IoU lands between 0.2 and 0.3 (cfr.1 tuning)', () => {
+    // Regression for the cfr.1 tuning: drive-through trucks used to trigger
+    // FULL at IoU 0.2. This truck overlaps bay 0's grown rect with IoU ≈ 0.28
+    // and its center (0.20, 0.315) sits below the grown rect (y ≤ 0.305), so
+    // under the tuned 0.3 threshold it must NOT fill the bay.
+    const truck = { cls: 'truck', conf: 0.9, bbox: [0.1, 0.21, 0.2, 0.21] as const };
+    const grown = { x: 0.095, y: 0.095, w: 0.21, h: 0.21 };
+    const iou = rectIoU(grown, { x: 0.1, y: 0.21, w: 0.2, h: 0.21 });
+    expect(iou).toBeGreaterThanOrEqual(0.2);
+    expect(iou).toBeLessThan(OCCUPANCY_IOU_THRESHOLD);
+    const states = computeBayStates(bays, [truck]);
+    expect(states.find((s) => s.bayId === 0)?.occupied).toBe(false);
+  });
+
+  it('still fills the bay when a parked truck reaches IoU ≥ OCCUPANCY_IOU_THRESHOLD', () => {
+    // Same truck nudged deeper into the bay so IoU crosses 0.3 → FULL.
+    const truck = { cls: 'truck', conf: 0.9, bbox: [0.12, 0.12, 0.16, 0.16] as const };
+    const grown = { x: 0.095, y: 0.095, w: 0.21, h: 0.21 };
+    expect(rectIoU(grown, { x: 0.12, y: 0.12, w: 0.16, h: 0.16 })).toBeGreaterThan(
+      OCCUPANCY_IOU_THRESHOLD,
+    );
+    const states = computeBayStates(bays, [truck]);
+    expect(states.find((s) => s.bayId === 0)?.occupied).toBe(true);
   });
 
   it('handles trucks smaller than the margin', () => {

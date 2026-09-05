@@ -64,6 +64,12 @@ class Settings:
     # weights). Empty means "the backend's default"; whatever serves is
     # surfaced via /health so the frontend HUD can display it.
     model_name: str = field(default_factory=lambda: _env_str("PARKING_MODEL_NAME", ""))
+    # NOTE (measured 2026-09-05, simtruck.pt over 503 GT frames): 0.35 is
+    # optimal at the bay-occupancy level — all observed noise detections
+    # (conf ≤ 0.67) sit away from bays (0 occupancy FPs), while raising the
+    # threshold only creates false-empty bays (real trucks down to conf
+    # 0.43). Do not raise without re-measuring; see README "Threshold
+    # tuning measurements".
     confidence_threshold: float = field(
         default_factory=lambda: _env_float("PARKING_CONF_THRESHOLD", 0.35)
     )
