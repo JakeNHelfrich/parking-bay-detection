@@ -21,7 +21,8 @@ export type TruckPhase = 'approach' | 'parking' | 'parked' | 'leaving' | 'exit';
 
 const LANE_SPEED = 9; // world units / s along the lane
 const PARK_DURATION = 8; // seconds a truck stays parked
-const TWEEN_DURATION = 2.2; // seconds for the in/out-of-bay maneuver
+// Swing into the 8.4 m deep bay; matches the mockup's TWEEN (2.6 s).
+const TWEEN_DURATION = 2.6; // seconds for the in/out-of-bay maneuver
 
 export class TruckActor {
   readonly mesh: THREE.Group;

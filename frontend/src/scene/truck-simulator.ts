@@ -11,7 +11,9 @@ import { TruckActor } from './truck-actor';
  */
 
 const SPAWN_INTERVAL = 5; // seconds between spawns
-const MAX_ACTIVE = 8;
+// Mockup far4 cap: fewer active actors than bays so the lane never gridlocks
+// and every swing into a bay has clear road.
+const MAX_ACTIVE = 3;
 
 export class TruckSimulator {
   private readonly actors: TruckActor[] = [];
