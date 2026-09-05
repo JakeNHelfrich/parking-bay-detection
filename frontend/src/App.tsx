@@ -20,6 +20,7 @@ import { AppStateProvider, useAppState, useAppStateStore } from './state/react';
 import type { AppStateStore } from './state/store';
 import { mountSim } from './sim/bootstrap';
 import { AppHeader } from './ui/AppHeader';
+import { InferenceHealthCard } from './ui/InferenceHealthCard';
 import { CameraIcon } from './ui/components';
 import styles from './App.module.css';
 
@@ -59,6 +60,7 @@ function Shell() {
             <h2 className={styles.sidebarTitle}>Parking bays</h2>
           </div>
           {/* Bay cards are wired to the store in a later bead. */}
+          <InferenceHealthCard />
         </aside>
       </main>
     </div>

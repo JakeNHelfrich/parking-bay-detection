@@ -1,0 +1,62 @@
+/* InferenceHealthCard — sidebar health banner per design/desktop.png.
+   Healthy = green accent tint; degraded = muted gray; offline = red tint.
+   All raw values come from tokens (see src/ui/styles/README.md). */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: var(--border-hairline);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-title-size);
+  font-weight: var(--text-title-weight);
+}
+
+.stats {
+  margin: 0;
+  font-size: var(--text-meta-size);
+  color: var(--color-muted);
+}
+
+/* Health states: tint + accent color shift with the label. */
+
+.healthy {
+  background: var(--color-ok-bg);
+  border-color: var(--color-accent-bg);
+}
+
+.healthy .head {
+  color: var(--color-accent-strong);
+}
+
+.healthy .head svg {
+  color: var(--color-accent);
+}
+
+.degraded {
+  background: var(--color-surface);
+}
+
+.degraded .head {
+  color: var(--color-muted);
+}
+
+.offline {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger-bg);
+}
+
+.offline .head {
+  color: var(--color-danger-strong);
+}
+
+.offline .head svg {
+  color: var(--color-danger);
+}

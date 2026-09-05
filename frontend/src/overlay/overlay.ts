@@ -1,6 +1,5 @@
 import type { BayDef } from '../bays/bay-defs';
 import type { BayState } from '../bays/occupancy';
-import type { ConnectionStatus } from '../net/detect-client';
 import { bboxToPixelRect, type PixelRect } from './coords';
 import type { DetectionsMessage } from '../net/protocol';
 
@@ -8,30 +7,21 @@ const BOX_COLOR = '#ffb020';
 const BAY_EMPTY_COLOR = '#4caf50';
 const BAY_FULL_COLOR = '#ff5252';
 const LABEL_BG = 'rgba(0, 0, 0, 0.65)';
-const HUD_COLOR = 'rgba(255, 255, 255, 0.92)';
-const OFFLINE_COLOR = '#ff5252';
 const FONT = '12px ui-monospace, SFMono-Regular, Menlo, monospace';
-
-export interface HudStats {
-  /** frameId of the latest accepted (non-stale) detection result. */
-  readonly frameId: number | null;
-  readonly latencyMs: number | null;
-  readonly inferenceMs: number | null;
-  readonly captureFps: number;
-}
 
 /**
  * The single overlay canvas: a 2D canvas layered above the WebGL canvas,
  * drawn in display-pixel space each animation frame from the latest
  * available detection result. Purely presentational — it never blocks on or
- * awaits inference, and simply keeps drawing the last state while offline.
+ * awaits inference; it keeps drawing the latest state regardless of
+ * connection status. It renders ONLY detection boxes and bay rects: status
+ * surfaces in the header pill and latency/fps in the sidebar inference
+ * health card — the React UI is the HUD.
  */
 export class Overlay {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private latest: DetectionsMessage | null = null;
-  private status: ConnectionStatus = 'connecting';
-  private stats: HudStats = { frameId: null, latencyMs: null, inferenceMs: null, captureFps: 0 };
   private bays: readonly BayDef[] = [];
   private bayStates: readonly BayState[] = [];
   /** Fitted 16:9 scene rect inside the container; normalized coords map here. */
@@ -66,14 +56,6 @@ export class Overlay {
     this.latest = message;
   }
 
-  setStatus(status: ConnectionStatus): void {
-    this.status = status;
-  }
-
-  setHud(stats: HudStats): void {
-    this.stats = stats;
-  }
-
   /** Installs the bay geometry once `bays.json` has loaded. */
   setBays(bays: readonly BayDef[]): void {
     this.bays = bays;
@@ -101,7 +83,6 @@ export class Overlay {
     this.ctx.clearRect(0, 0, width, height);
     this.drawBays();
     this.drawDetections();
-    this.drawHud();
   }
 
   private drawBays(): void {
@@ -139,34 +120,6 @@ export class Overlay {
       this.ctx.fillRect(rect.x, labelY - 11, metrics.width + 8, 15);
       this.ctx.fillStyle = BOX_COLOR;
       this.ctx.fillText(label, rect.x + 4, labelY + 1);
-    }
-  }
-
-  private drawHud(): void {
-    const { frameId, latencyMs, inferenceMs, captureFps } = this.stats;
-    const latency = latencyMs === null ? '—' : `${latencyMs.toFixed(1)}ms`;
-    const inference = inferenceMs === null ? '—' : `${inferenceMs.toFixed(1)}ms`;
-    const frame = frameId === null ? '—' : `#${frameId}`;
-    const detCount = this.latest?.detections.length ?? 0;
-    const occupied = this.bayStates.filter((state) => state.occupied).length;
-    const bays =
-      this.bays.length === 0 ? '' : ` | bays: ${occupied}/${this.bays.length} FULL`;
-    const line = `detect: ${this.status} | frame: ${frame} | latency: ${latency} | infer: ${inference} | capture: ${captureFps.toFixed(0)}fps | boxes: ${detCount}${bays}`;
-
-    this.ctx.font = FONT;
-    const metrics = this.ctx.measureText(line);
-    this.ctx.fillStyle = LABEL_BG;
-    this.ctx.fillRect(8, 8, metrics.width + 16, 22);
-    this.ctx.fillStyle = this.status === 'online' ? HUD_COLOR : OFFLINE_COLOR;
-    this.ctx.fillText(line, 16, 23);
-
-    if (this.status !== 'online') {
-      const banner = 'detection offline — reconnecting…';
-      const bannerMetrics = this.ctx.measureText(banner);
-      this.ctx.fillStyle = LABEL_BG;
-      this.ctx.fillRect(8, 38, bannerMetrics.width + 16, 22);
-      this.ctx.fillStyle = OFFLINE_COLOR;
-      this.ctx.fillText(banner, 16, 53);
     }
   }
 }

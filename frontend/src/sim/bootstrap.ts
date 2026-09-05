@@ -88,7 +88,6 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
       }
     },
     onStatus(status: ConnectionStatus) {
-      overlay.setStatus(status);
       store.setConnectionStatus(status);
     },
   });
@@ -148,7 +147,7 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
     // Sim lifecycle: trucks only spawn/move while running; the world keeps
-    // rendering (letterbox, overlay, HUD) so the shell stays alive.
+    // rendering (letterbox, overlay) so the shell stays alive.
     if (store.getState().simRunning) {
       simulator.update(dt);
     }
@@ -161,8 +160,7 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
       inferenceMs: latestDetections?.inferenceMs ?? null,
       captureFps,
     };
-    overlay.setHud(hud);
-    store.setHud(hud);
+    store.setHud(hud); // React UI is the HUD (header pill + health card).
     // Re-read the fitted rect every frame: world.ts may replace it on panel
     // resize, and the overlay must always map into the current 16:9 rect.
     overlay.setViewport(world.viewport);

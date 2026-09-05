@@ -13,7 +13,7 @@ import type { BayState } from '../bays/occupancy';
 import type { ConnectionStatus } from '../net/detect-client';
 import type { DetectionsMessage } from '../net/protocol';
 
-/** HUD figures; mirrors what `Overlay.setHud` renders today. */
+/** HUD figures driving the React health card (latency/fps). */
 export interface HudStats {
   readonly frameId: number | null;
   readonly latencyMs: number | null;
