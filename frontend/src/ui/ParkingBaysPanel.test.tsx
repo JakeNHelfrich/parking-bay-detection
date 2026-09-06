@@ -10,7 +10,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createAppStateStore, type AppStateStore } from '../state/store';
 import { AppStateProvider } from '../state/react';
 import type { BayLayout } from '../bays/bay-defs';
-import { bayLabel, bayStatusCopy, bayTone, ParkingBaysPanel } from './ParkingBaysPanel';
+import { bayDurationCopy, bayLabel, bayStatusCopy, bayTone, ParkingBaysPanel } from './ParkingBaysPanel';
 
 /** Arbitrary fixture timestamp for stabilized bay states (epoch ms). */
 const T_FIX = 1_700_000_000_000;
@@ -90,6 +90,36 @@ describe('bayTone', () => {
   });
 });
 
+describe('bayDurationCopy', () => {
+  const NOW = 1_700_000_400_000; // 400s after T_FIX
+
+  it('formats the elapsed time since the state transition timestamp', () => {
+    expect(bayDurationCopy({ bayId: 0, occupied: true, sinceMs: NOW - 6 * 60_000 }, NOW)).toBe(
+      'for 6 min',
+    );
+    expect(
+      bayDurationCopy({ bayId: 0, occupied: true, sinceMs: NOW - 72 * 60_000 }, NOW),
+    ).toBe('for 1 h 12 m');
+  });
+
+  it('returns null while the sim is idle — no live truth to date from', () => {
+    expect(
+      bayDurationCopy({ bayId: 0, occupied: true, sinceMs: NOW - 60_000 }, NOW, false),
+    ).toBeNull();
+  });
+
+  it('returns null when the state has no sinceMs or a non-finite one', () => {
+    expect(bayDurationCopy({ bayId: 0, occupied: true, sinceMs: Number.NaN }, NOW)).toBeNull();
+    expect(bayDurationCopy(undefined, NOW)).toBeNull();
+  });
+
+  it('clamps skewed clocks to "for under a min", never negative copy', () => {
+    expect(bayDurationCopy({ bayId: 0, occupied: true, sinceMs: NOW + 30_000 }, NOW)).toBe(
+      'for under a min',
+    );
+  });
+});
+
 describe('ParkingBaysPanel', () => {
   it('renders one card per bay in bays.json order, using bay ids for identity', () => {
     const store = createAppStateStore();
@@ -106,12 +136,30 @@ describe('ParkingBaysPanel', () => {
     store.setBayLayout(layout);
     store.setSimRunning(true); // live copy only exists once the sim runs
     store.setBayStates([
-      { bayId: 1, occupied: true, confidence: 0.87, sinceMs: T_FIX },
-      { bayId: 0, occupied: false, confidence: 0.98, sinceMs: T_FIX },
+      { bayId: 1, occupied: true, confidence: 0.87, sinceMs: Date.now() - 6.5 * 60_000 },
+      { bayId: 0, occupied: false, confidence: 0.98, sinceMs: Date.now() - 6.5 * 60_000 },
     ]);
     const html = renderWithStore(store);
     expect(html).toContain('Occupied · truck detected');
     expect(html).toContain('Clear · 98% confidence');
+    // "Since when" (yp6.2): recomputed from sinceMs at render time.
+    expect(html).toContain('for 6 min');
+  });
+
+  it('omits the duration on cards without a sinceMs stamp or while idle', () => {
+    const store = createAppStateStore();
+    store.setBayLayout(layout);
+    store.setSimRunning(true);
+    store.setBayStates([
+      { bayId: 0, occupied: false, confidence: 0.9, sinceMs: Number.NaN }, // bad stamp
+    ]);
+    let html = renderWithStore(store);
+    expect(html).not.toContain('for ');
+
+    store.setSimRunning(false);
+    store.setBayStates([{ bayId: 0, occupied: false, confidence: 0.9, sinceMs: T_FIX }]);
+    html = renderWithStore(store);
+    expect(html).not.toContain('for '); // idle cards read "Waiting to start" only
   });
 
   it('falls back to an unmatched (clear, no-confidence) state for unmapped bays', () => {

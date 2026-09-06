@@ -43,3 +43,12 @@
   line-height: var(--leading-normal);
   color: var(--color-muted);
 }
+
+/* Per-bay "since when" (yp6.2): muted meta under the status copy. */
+.baySince {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-meta-size);
+  font-weight: var(--text-meta-weight);
+  line-height: var(--leading-tight);
+  color: var(--color-muted);
+}

@@ -7,12 +7,15 @@
  * with no code change (invariant 4). Bay identity comes only from bay ids
  * (invariant 5) — nothing here derives identity from model output.
  *
- * Pure helpers are exported for tests: `bayLabel` (bayId -> "Bay 01") and
- * `bayStatusCopy` (BayState -> state copy per the mockup copywriting).
+ * Pure helpers are exported for tests: `bayLabel` (bayId -> "Bay 01"),
+ * `bayStatusCopy` (BayState -> state copy per the mockup copywriting) and
+ * `bayDurationCopy` (StableBayState + now -> "for 6 min" or null).
  */
 
 import { useAppState } from '../state/react';
 import type { BayState } from '../bays/occupancy';
+import type { StableBayState } from '../bays/stabilizer';
+import { durationSince } from './duration';
 import { Card } from './components';
 import styles from './ParkingBaysPanel.module.css';
 
@@ -47,6 +50,26 @@ export function bayTone(state: BayState | undefined, simRunning = true): BayTone
 
 export type BayTone = 'occupied' | 'clear' | 'unknown';
 
+/**
+ * Per-bay "since when" copy (bead yp6.2): "for 6 min" while the sim runs and
+ * the stabilized state carries a transition timestamp, null otherwise (no
+ * state yet, no `sinceMs`, or idle — idle cards read "Waiting to start" and
+ * have no live truth to date from). Callers pass `now` explicitly; the
+ * component takes it at render time, so the duration is recomputed from the
+ * store snapshot on each store emit (~10/s while running) with no
+ * per-component timers. The future board view (yp6.4) reuses this rule.
+ */
+export function bayDurationCopy(
+  state: StableBayState | undefined,
+  nowMs: number,
+  simRunning = true,
+): string | null {
+  if (!simRunning || state?.sinceMs === undefined || !Number.isFinite(state.sinceMs)) {
+    return null;
+  }
+  return `for ${durationSince(state.sinceMs, nowMs)}`;
+}
+
 export function ParkingBaysPanel() {
   const bayLayout = useAppState((state) => state.bayLayout);
   const bayStates = useAppState((state) => state.bayStates);
@@ -57,12 +80,19 @@ export function ParkingBaysPanel() {
   // previous layout, so never zip bays and states positionally.
   const stateById = new Map(bayStates.map((state) => [state.bayId, state]));
 
+  // `now` is taken at render, not from a timer: the store re-emits on every
+  // detections frame (~10/s while running), so each emit recomputes the
+  // durations from the snapshot's `sinceMs` stamps (yp6.2). When emits stop
+  // (idle/disconnected) the copy freezes with the rest of the snapshot.
+  const nowMs = Date.now();
+
   return (
     <div className={styles.list}>
       {bays.map((bay) => {
         const state = stateById.get(bay.id);
         const fallback: BayState = { bayId: bay.id, occupied: false };
         const tone = bayTone(state);
+        const duration = bayDurationCopy(state, nowMs, simRunning);
         return (
           <Card
             key={bay.id}
@@ -70,6 +100,7 @@ export function ParkingBaysPanel() {
           >
             <h3 className={styles.bayTitle}>{bayLabel(bay.id)}</h3>
             <p className={styles.bayStatus}>{bayStatusCopy(state ?? fallback, simRunning)}</p>
+            {duration === null ? null : <p className={styles.baySince}>{duration}</p>}
           </Card>
         );
       })}
