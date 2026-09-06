@@ -15,6 +15,7 @@
 import { useAppState } from '../state/react';
 import type { BayState } from '../bays/occupancy';
 import type { StableBayState } from '../bays/stabilizer';
+import { trustIssue, bayIsUnconfirmed, BAY_TRUST_MIN_CONFIDENCE, type TrustIssue } from '../bays/trust';
 import { durationSince } from './duration';
 import { Card } from './components';
 import styles from './ParkingBaysPanel.module.css';
@@ -32,20 +33,41 @@ export function bayLabel(bayId: number): string {
 
 /** Pure copy formatter per the mockup: state + occupancy-confidence bead.
  *  While the sim is idle there is no detection stream yet, so every bay
- *  reads "Waiting to start" (bead parking-bay-detection-tdq). */
-export function bayStatusCopy(state: BayState, simRunning = true): string {
-  if (!simRunning) return 'Waiting to start';
-  if (state.occupied) return 'Occupied · truck detected';
+ *  reads "Waiting to start" (bead parking-bay-detection-tdq). When the
+ *  evidence stream cannot support a claim (yp6.3), every bay reads an
+ *  explicit "Can't confirm" with the reason — never a silent last-known
+ *  state, and a never-observed bay says so instead of guessing "Clear". */
+export function bayStatusCopy(
+  state: BayState | undefined,
+  simRunning = true,
+  issue: TrustIssue | null = null,
+): string {
+  if (!simRunning || issue === 'idle') return 'Waiting to start';
+  if (issue === 'no-data') return "Can't confirm · waiting for detections";
+  if (issue === 'feed-stale') return "Can't confirm · detection feed stale";
+  if (issue === 'feed-offline') return "Can't confirm · inference offline";
+  if (state === undefined) return "Can't confirm · no data yet";
+  if (state.occupied) {
+    if (state.confidence !== undefined && state.confidence < BAY_TRUST_MIN_CONFIDENCE) {
+      return "Can't confirm · weak truck match";
+    }
+    return 'Occupied · truck detected';
+  }
   const pct =
     state.confidence === undefined ? '—' : `${Math.round(state.confidence * 100)}%`;
   return `Clear · ${pct} confidence`;
 }
 
-/** Bay-card accent tone: while idle everything is gray "no data yet";
- *  once running, red FULL / green EMPTY mirroring the overlay colors. */
-export function bayTone(state: BayState | undefined, simRunning = true): BayTone {
-  if (!simRunning || state === undefined) return 'unknown';
-  return state.occupied ? 'occupied' : 'clear';
+/** Bay-card accent tone: gray ("unknown") whenever the bay's state may not
+ *  be asserted — sim idle, evidence stream degraded, no observation, or a
+ *  weak match; otherwise red FULL / green EMPTY mirroring the overlay. */
+export function bayTone(
+  state: BayState | undefined,
+  simRunning = true,
+  issue: TrustIssue | null = null,
+): BayTone {
+  if (!simRunning || bayIsUnconfirmed(state, issue)) return 'unknown';
+  return state!.occupied ? 'occupied' : 'clear';
 }
 
 export type BayTone = 'occupied' | 'clear' | 'unknown';
@@ -75,6 +97,9 @@ export function ParkingBaysPanel() {
   const bayStates = useAppState((state) => state.bayStates);
   const simRunning = useAppState((state) => state.simRunning);
 
+  const connectionStatus = useAppState((state) => state.connectionStatus);
+  const detectionsAtMs = useAppState((state) => state.detectionsAtMs);
+
   const bays = bayLayout?.bays ?? [];
   // Index BayStates by bay id: the store may hold states computed against a
   // previous layout, so never zip bays and states positionally.
@@ -82,24 +107,29 @@ export function ParkingBaysPanel() {
 
   // `now` is taken at render, not from a timer: the store re-emits on every
   // detections frame (~10/s while running), so each emit recomputes the
-  // durations from the snapshot's `sinceMs` stamps (yp6.2). When emits stop
-  // (idle/disconnected) the copy freezes with the rest of the snapshot.
+  // durations and the trust verdict (yp6.3) from the snapshot; the rAF-driven
+  // HUD heartbeat keeps staleness fresh between detection frames.
   const nowMs = Date.now();
+  const issue = trustIssue({ simRunning, connectionStatus, detectionsAtMs, nowMs });
 
   return (
     <div className={styles.list}>
       {bays.map((bay) => {
         const state = stateById.get(bay.id);
-        const fallback: BayState = { bayId: bay.id, occupied: false };
-        const tone = bayTone(state);
-        const duration = bayDurationCopy(state, nowMs, simRunning);
+        const tone = bayTone(state, simRunning, issue);
+        // Duration rides the state claim: hidden whenever the bay is
+        // unconfirmed — "for 6 min" under "Can't confirm" would dress the
+        // last-known state up as current truth.
+        const duration = bayIsUnconfirmed(state, issue)
+          ? null
+          : bayDurationCopy(state, nowMs, simRunning);
         return (
           <Card
             key={bay.id}
             className={[styles.bayCard, toneStyles[tone]].filter(Boolean).join(' ')}
           >
             <h3 className={styles.bayTitle}>{bayLabel(bay.id)}</h3>
-            <p className={styles.bayStatus}>{bayStatusCopy(state ?? fallback, simRunning)}</p>
+            <p className={styles.bayStatus}>{bayStatusCopy(state, simRunning, issue)}</p>
             {duration === null ? null : <p className={styles.baySince}>{duration}</p>}
           </Card>
         );

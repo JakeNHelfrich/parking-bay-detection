@@ -62,6 +62,17 @@ describe('createAppStateStore', () => {
     expect(state.simRunning).toBe(false);
   });
 
+  it('setDetections stamps a receipt time for the trust check (yp6.3)', () => {
+    const store = createAppStateStore();
+    expect(store.getState().detectionsAtMs).toBeNull(); // no evidence yet
+    const before = Date.now();
+    store.setDetections(detections);
+    const stamped = store.getState().detectionsAtMs;
+    expect(stamped).not.toBeNull();
+    expect(stamped!).toBeGreaterThanOrEqual(before);
+    expect(stamped!).toBeLessThanOrEqual(Date.now());
+  });
+
   it('setBayLayout / setBayStates publish independently', () => {
     const store = createAppStateStore();
     store.setBayLayout(layout);

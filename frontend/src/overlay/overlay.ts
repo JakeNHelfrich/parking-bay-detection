@@ -6,6 +6,8 @@ import type { DetectionsMessage } from '../net/protocol';
 const BOX_COLOR = '#ffb020';
 const BAY_EMPTY_COLOR = '#4caf50';
 const BAY_FULL_COLOR = '#ff5252';
+/** Unconfirmed bays (yp6.3): gray rect + number-only label — no state claim. */
+const BAY_UNCONFIRMED_COLOR = '#9aa5ad';
 const LABEL_BG = 'rgba(0, 0, 0, 0.65)';
 const FONT_STACK = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 /** Reference viewport width for the scale-aware overlay font (mockup drawOverlay). */
@@ -57,6 +59,7 @@ export class Overlay {
   private latest: DetectionsMessage | null = null;
   private bays: readonly BayDef[] = [];
   private bayStates: readonly BayState[] = [];
+  private unconfirmedBayIds: ReadonlySet<number> = new Set();
   /** Fitted 16:9 scene rect inside the container; normalized coords map here. */
   private viewport: PixelRect = { x: 0, y: 0, w: 0, h: 0 };
 
@@ -99,6 +102,16 @@ export class Overlay {
     this.bayStates = states;
   }
 
+  /**
+   * Bays whose state may not be asserted right now (yp6.3, computed by
+   * `unconfirmedBayIds` in `src/bays/trust.ts`): drawn gray with a
+   * number-only label — the canvas makes no occupancy claim for them,
+   * mirroring the board's "Can't confirm" cards.
+   */
+  setUnconfirmedBayIds(ids: readonly number[]): void {
+    this.unconfirmedBayIds = new Set(ids);
+  }
+
   /** Installs the fitted 16:9 scene rect that normalized coordinates map into. */
   setViewport(viewport: PixelRect): void {
     this.viewport = viewport;
@@ -135,15 +148,22 @@ export class Overlay {
     for (let i = 0; i < this.bays.length; i++) {
       const bay = this.bays[i];
       const rect = rects[i];
-      const occupied = occupiedById.get(bay.id) ?? false;
-      this.ctx.strokeStyle = occupied ? BAY_FULL_COLOR : BAY_EMPTY_COLOR;
+      // Trust first (yp6.3): an unconfirmed bay is drawn gray with its
+      // number only — the board must not silently assert the last-known
+      // OCC/CLEAR state when the evidence stream can't back it.
+      const unconfirmed = this.unconfirmedBayIds.has(bay.id);
+      const occupied = !unconfirmed && (occupiedById.get(bay.id) ?? false);
+      const color = unconfirmed ? BAY_UNCONFIRMED_COLOR : occupied ? BAY_FULL_COLOR : BAY_EMPTY_COLOR;
+      this.ctx.strokeStyle = color;
       this.ctx.lineWidth = 2;
       this.ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
 
       const { full, short } = bayLabelTexts(bay.id, occupied);
       const fullW = this.ctx.measureText(full).width;
       const budget = labelBudget(centers, i);
-      const label = fullW + 9 * scale > budget ? short : full;
+      // Unconfirmed bays always get the number-only label: no OCC/CLEAR word.
+      const label =
+        unconfirmed || fullW + 9 * scale > budget ? short : full;
       const textW = this.ctx.measureText(label).width;
       // Mouth edge of the quad = its bottom in screen space; the pill sits
       // just above that line, centred on the quad.
@@ -153,7 +173,7 @@ export class Overlay {
       const boxH = fontPx + 6 * scale;
       this.ctx.fillStyle = LABEL_BG;
       this.ctx.fillRect(cx - boxW / 2, cy - boxH - 3 * scale, boxW, boxH);
-      this.ctx.fillStyle = occupied ? BAY_FULL_COLOR : BAY_EMPTY_COLOR;
+      this.ctx.fillStyle = color;
       this.ctx.fillText(label, cx - textW / 2, cy - 7 * scale);
     }
   }

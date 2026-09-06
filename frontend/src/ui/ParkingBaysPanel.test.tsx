@@ -1,19 +1,33 @@
 /**
- * ParkingBaysPanel tests (bead: parking bays sidebar panel). Covers the
- * pure label formatter (AC) and the store-driven render: bay list derives
- * from bays.json data in the store, state copy from bayStates.
+ * ParkingBaysPanel tests (bead: parking bays sidebar panel; trust yp6.3).
+ * Covers the pure formatters (label / status copy / tone) and the
+ * store-driven render: bay list derives from bays.json data in the store,
+ * state copy from bayStates, and "Can't confirm" whenever the evidence
+ * stream (connection, detections age, per-bay match confidence) can't
+ * back a claim.
  */
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createAppStateStore, type AppStateStore } from '../state/store';
 import { AppStateProvider } from '../state/react';
 import type { BayLayout } from '../bays/bay-defs';
+import type { DetectionsMessage } from '../net/protocol';
 import { bayDurationCopy, bayLabel, bayStatusCopy, bayTone, ParkingBaysPanel } from './ParkingBaysPanel';
 
 /** Arbitrary fixture timestamp for stabilized bay states (epoch ms). */
 const T_FIX = 1_700_000_000_000;
+
+/** Fresh evidence for live-card renders: panels derive trust from the
+ * detectionsAtMs receipt stamp that setDetections publishes (yp6.3). */
+const FRESH_DETECTIONS: DetectionsMessage = {
+  type: 'detections',
+  frameId: 1,
+  latencyMs: 5,
+  inferenceMs: 4,
+  detections: [],
+};
 
 const layout: BayLayout = {
   version: 1,
@@ -68,6 +82,28 @@ describe('bayStatusCopy', () => {
   it('renders a dash for confidence when the bay is unmatched', () => {
     expect(bayStatusCopy({ bayId: 2, occupied: false })).toBe('Clear · — confidence');
   });
+
+  it("reads an explicit Can't confirm with the reason when the stream degrades (yp6.3)", () => {
+    expect(bayStatusCopy({ bayId: 0, occupied: true }, true, 'no-data')).toBe(
+      "Can't confirm · waiting for detections",
+    );
+    expect(bayStatusCopy({ bayId: 0, occupied: true }, true, 'feed-stale')).toBe(
+      "Can't confirm · detection feed stale",
+    );
+    expect(bayStatusCopy({ bayId: 0, occupied: true }, true, 'feed-offline')).toBe(
+      "Can't confirm · inference offline",
+    );
+  });
+
+  it("reads Can't confirm for a bay never observed — no silent \"Clear\" guess", () => {
+    expect(bayStatusCopy(undefined, true, null)).toBe("Can't confirm · no data yet");
+  });
+
+  it("reads Can't confirm for an occupied match below the trust threshold", () => {
+    expect(bayStatusCopy({ bayId: 0, occupied: true, confidence: 0.2 })).toBe(
+      "Can't confirm · weak truck match",
+    );
+  });
 });
 
 describe('bayTone', () => {
@@ -87,6 +123,19 @@ describe('bayTone', () => {
 
   it('maps missing state entries (stale/no data) to the unknown tone', () => {
     expect(bayTone(undefined)).toBe('unknown');
+  });
+
+  it('maps every bay to the unknown tone when the stream has a problem (yp6.3)', () => {
+    expect(bayTone({ bayId: 0, occupied: true, confidence: 0.9 }, true, 'feed-stale')).toBe(
+      'unknown',
+    );
+    expect(bayTone({ bayId: 0, occupied: false, confidence: 0.9 }, true, 'no-data')).toBe(
+      'unknown',
+    );
+  });
+
+  it('maps a weak occupied match to the unknown tone (trust threshold)', () => {
+    expect(bayTone({ bayId: 0, occupied: true, confidence: 0.2 })).toBe('unknown');
   });
 });
 
@@ -135,6 +184,7 @@ describe('ParkingBaysPanel', () => {
     const store = createAppStateStore();
     store.setBayLayout(layout);
     store.setSimRunning(true); // live copy only exists once the sim runs
+    store.setDetections(FRESH_DETECTIONS); // fresh evidence (yp6.3)
     store.setBayStates([
       { bayId: 1, occupied: true, confidence: 0.87, sinceMs: Date.now() - 6.5 * 60_000 },
       { bayId: 0, occupied: false, confidence: 0.98, sinceMs: Date.now() - 6.5 * 60_000 },
@@ -146,10 +196,33 @@ describe('ParkingBaysPanel', () => {
     expect(html).toContain('for 6 min');
   });
 
+  it("reads Can't confirm on every card while the detection feed is stale (yp6.3)", () => {
+    vi.useFakeTimers();
+    try {
+      const store = createAppStateStore();
+      store.setBayLayout(layout);
+      store.setSimRunning(true);
+      store.setDetections(FRESH_DETECTIONS); // receipt stamped at mocked now
+      vi.advanceTimersByTime(6_000); // past DETECTIONS_STALE_AFTER_MS (5s)
+      store.setBayStates([{ bayId: 0, occupied: true, confidence: 0.9, sinceMs: T_FIX }]);
+      const html = renderWithStore(store);
+      expect(html).toContain('· detection feed stale'); // apostrophe is HTML-encoded
+      expect(html).not.toContain('Occupied · truck detected'); // no silent last-known claim
+      expect(html).not.toContain('for '); // duration rides the state claim: hidden
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('omits the duration on cards without a sinceMs stamp or while idle', () => {
     const store = createAppStateStore();
     store.setBayLayout(layout);
     store.setSimRunning(true);
+    store.setDetections(FRESH_DETECTIONS);
     store.setBayStates([
       { bayId: 0, occupied: false, confidence: 0.9, sinceMs: Number.NaN }, // bad stamp
     ]);
@@ -162,12 +235,14 @@ describe('ParkingBaysPanel', () => {
     expect(html).not.toContain('for '); // idle cards read "Waiting to start" only
   });
 
-  it('falls back to an unmatched (clear, no-confidence) state for unmapped bays', () => {
+  it("reads Can't confirm · no data yet for running bays never observed (yp6.3)", () => {
     const store = createAppStateStore();
     store.setBayLayout(layout); // no setBayStates: store holds no states yet
     store.setSimRunning(true);
+    store.setDetections(FRESH_DETECTIONS);
     const html = renderWithStore(store);
-    expect(html).toContain('Clear · — confidence');
+    expect(html).toContain('· no data yet'); // apostrophe is HTML-encoded
+    expect(html).not.toContain('Clear · — confidence'); // no silent baseline guess
   });
 
   it('reads Waiting to start on every card while the sim is idle', () => {
@@ -187,6 +262,8 @@ describe('ParkingBaysPanel', () => {
   it('color-codes cards by occupancy state (occupied / clear / unknown tones)', () => {
     const store = createAppStateStore();
     store.setBayLayout(layout);
+    store.setSimRunning(true);
+    store.setDetections(FRESH_DETECTIONS);
     store.setBayStates([
       { bayId: 0, occupied: true, confidence: 0.9, sinceMs: T_FIX }, // occupied
       { bayId: 1, occupied: false, confidence: 0.95, sinceMs: T_FIX }, // clear

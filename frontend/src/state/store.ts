@@ -30,6 +30,12 @@ export interface AppState {
   readonly connectionStatus: ConnectionStatus;
   /** Latest accepted (non-stale) detections message, or null before the first. */
   readonly latestDetections: DetectionsMessage | null;
+  /**
+   * Wall-clock ms (Date.now()) at which `latestDetections` arrived, stamped
+   * by the publisher (yp6.3): the board's trust check measures evidence age
+   * against this. null before the first detections frame.
+   */
+  readonly detectionsAtMs: number | null;
   /** Validated bay map from bays.json, or null when missing/invalid. */
   readonly bayLayout: BayLayout | null;
   /**
@@ -86,6 +92,7 @@ export function createAppStateStore(): AppStateStore {
   let state: AppState = {
     connectionStatus: 'connecting',
     latestDetections: null,
+    detectionsAtMs: null,
     bayLayout: null,
     bayStates: [],
     hud: INITIAL_HUD,
@@ -117,7 +124,9 @@ export function createAppStateStore(): AppStateStore {
       update({ connectionStatus: status });
     },
     setDetections(message: DetectionsMessage): void {
-      update({ latestDetections: message });
+      // Receipt stamp (yp6.3): trust staleness is measured from arrival,
+      // publisher-side, so no consumer re-derives a clock (invariant 2).
+      update({ latestDetections: message, detectionsAtMs: Date.now() });
     },
     setBayLayout(layout: BayLayout): void {
       update({ bayLayout: layout });

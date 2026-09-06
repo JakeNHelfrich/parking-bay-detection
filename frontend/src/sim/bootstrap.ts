@@ -21,6 +21,7 @@ import { resolveDetectWsUrl } from '../net/ws-url';
 import { loadBayLayout, bayMapVersion } from '../bays/bay-defs';
 import { computeBayStates } from '../bays/occupancy';
 import { BayStateStabilizer } from '../bays/stabilizer';
+import { trustIssue, unconfirmedBayIds } from '../bays/trust';
 import { Overlay } from '../overlay/overlay';
 import { createBayField } from '../scene/bays';
 import { createDepotScenery } from '../scene/scenery';
@@ -129,6 +130,7 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
       }
     },
     onStatus(status: ConnectionStatus) {
+      connectionStatus = status;
       store.setConnectionStatus(status);
     },
   });
@@ -167,6 +169,9 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
 
   let latestFrameId = 0;
   let latestDetections: DetectionsMessage | null = null;
+  // Local echo of the connection lifecycle (yp6.3): the render loop's trust
+  // check reads this synchronously instead of reaching into store snapshots.
+  let connectionStatus: ConnectionStatus = 'connecting';
   let capturesSinceFpsTick = 0;
   let lastFpsTickMs = performance.now();
   let captureFps = 0;
@@ -215,6 +220,7 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
     world.render();
     maybeCaptureAndSend(now);
     tickFps(now);
+    const snap = store.getState();
     const hud = {
       frameId: latestDetections?.frameId ?? null,
       latencyMs: latestDetections?.latencyMs ?? null,
@@ -222,6 +228,21 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
       captureFps,
     };
     store.setHud(hud); // React UI is the HUD (header pill + health card).
+    // Honest board (yp6.3): re-evaluate trust every frame — the HUD publish
+    // above keeps the store emitting even when detections stop, so the UI's
+    // staleness clock never freezes on last-known evidence. The overlay grays
+    // unconfirmed bays (number-only label); the cards say why. Trust is a
+    // display projection only: the stabilizer and the server record are
+    // untouched (invariant 5).
+    const issue = trustIssue({
+      simRunning: snap.simRunning,
+      connectionStatus,
+      detectionsAtMs: snap.detectionsAtMs,
+      nowMs: Date.now(),
+    });
+    overlay.setUnconfirmedBayIds(
+      unconfirmedBayIds(snap.bayStates, issue, snap.bayLayout?.bays.map((bay) => bay.id) ?? []),
+    );
     // Re-read the fitted rect every frame: world.ts may replace it on panel
     // resize, and the overlay must always map into the current 16:9 rect.
     overlay.setViewport(world.viewport);
