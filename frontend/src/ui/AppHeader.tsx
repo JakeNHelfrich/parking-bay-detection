@@ -40,6 +40,7 @@ export function AppHeader() {
   const status = useAppState((state) => state.connectionStatus);
   const simRunning = useAppState((state) => state.simRunning);
   const view = useAppState((state) => state.view);
+  const boardOpen = useAppState((state) => state.boardOpen);
   const pill = pillForStatus(status);
 
   return (
@@ -63,6 +64,12 @@ export function AppHeader() {
         <div className={styles.viewControls}>
           <Button variant="ghost" onClick={() => store.setView(view === 'history' ? 'live' : 'history')}>
             {view === 'history' ? 'Back to live' : 'History'}
+          </Button>
+          {/* Yard board toggle (yp6.4): overlays the glanceable board above the
+              live view (sim keeps running underneath); dismissed from the
+              board's own control or here. */}
+          <Button variant="ghost" onClick={() => store.setBoardOpen(!boardOpen)}>
+            {boardOpen ? 'Back to yard' : 'Yard board'}
           </Button>
           <Button onClick={() => store.setSimRunning(!simRunning)}>
             {simRunning ? 'Stop simulation' : 'Start simulation'}

@@ -41,6 +41,7 @@ import { AlertsPanel } from './ui/AlertsPanel';
 import { AppHeader } from './ui/AppHeader';
 import { HistoryPanel } from './ui/HistoryPanel';
 import { ParkingBaysPanel } from './ui/ParkingBaysPanel';
+import { YardBoard } from './ui/YardBoard';
 import { PlayIcon } from './ui/components';
 import styles from './App.module.css';
 
@@ -62,6 +63,7 @@ function Shell() {
   const simRunning = useAppState((state) => state.simRunning);
   const bayLayout = useAppState((state) => state.bayLayout);
   const view = useAppState((state) => state.view);
+  const boardOpen = useAppState((state) => state.boardOpen);
 
   useEffect(() => {
     const host = simHostRef.current;
@@ -108,6 +110,11 @@ function Shell() {
                   Renders only when there is news; acks dispatch via polling glue. */}
               <AlertsAreaShell onAcknowledge={(id) => pollingRef.current?.acknowledge(id)} />
             </aside>
+            {/* Glanceable yard board (yp6.4): full-area overlay above the live
+                view. The sim pipeline stays mounted underneath, so board data
+                keeps flowing from the store; the sidebar cards remain the
+                detail view once the board is dismissed. */}
+            {boardOpen ? <YardBoard /> : null}
           </>
         )}
       </main>

@@ -24,6 +24,7 @@
 /* --------------------------------------------------------------------- */
 
 .main {
+  position: relative; /* anchors the yp6.4 yard-board overlay */
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: var(--space-4);

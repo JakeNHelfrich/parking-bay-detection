@@ -49,6 +49,9 @@ export interface AppState {
   readonly simRunning: boolean;
   /** Which main region the shell renders (rzo.4): live yard or history. */
   readonly view: AppView;
+  /** True while the glanceable yard board (yp6.4) covers the live view. The
+   * sim pipeline stays mounted underneath, so board data stays live. */
+  readonly boardOpen: boolean;
   /** Unacknowledged alerts from the durable record (polled REST, rzo.5). */
   readonly alerts: readonly AlertSummary[];
   /** Last alerts-fetch error message, or null while healthy. */
@@ -76,6 +79,8 @@ export interface AppStateStore {
   setSimRunning(running: boolean): void;
   /** Switches the main region between the live yard and the history board. */
   setView(view: AppView): void;
+  /** Opens/closes the full-viewport glanceable yard board (yp6.4). */
+  setBoardOpen(open: boolean): void;
   setAlerts(alerts: readonly AlertSummary[]): void;
   setAlertsError(message: string | null): void;
   removeAlert(id: number): void;
@@ -98,6 +103,7 @@ export function createAppStateStore(): AppStateStore {
     hud: INITIAL_HUD,
     simRunning: false,
     view: 'live',
+    boardOpen: false,
     alerts: [],
     alertsError: null,
   };
@@ -167,6 +173,9 @@ export function createAppStateStore(): AppStateStore {
     },
     setView(view: AppView): void {
       update({ view });
+    },
+    setBoardOpen(open: boolean): void {
+      update({ boardOpen: open });
     },
     setAlerts(alerts: readonly AlertSummary[]): void {
       update({ alerts: [...alerts], alertsError: null });

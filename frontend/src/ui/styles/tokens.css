@@ -78,6 +78,12 @@
   --text-meta-size: 0.8125rem;      /* 13px */
   --text-meta-weight: 400;
 
+  /* Display type — the glanceable yard board (yp6.4): state words readable
+     from across a room; scales down toward tablet via the viewport width. */
+  --text-display-size: clamp(2.25rem, 7vw, 5rem);   /* 36px → 80px */
+  --text-display-weight: 800;
+  --text-display-label-size: clamp(0.8125rem, 1.4vw, 1rem); /* 13px → 16px */
+
   --leading-tight: 1.25;
   --leading-normal: 1.5;
 

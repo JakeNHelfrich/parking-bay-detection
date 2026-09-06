@@ -82,6 +82,15 @@ describe('createAppStateStore', () => {
     expect(state.bayStates).toEqual([{ bayId: 0, occupied: true, sinceMs: T_FIX }]);
   });
 
+  it('setBoardOpen toggles the yard-board overlay flag (yp6.4)', () => {
+    const store = createAppStateStore();
+    expect(store.getState().boardOpen).toBe(false);
+    store.setBoardOpen(true);
+    expect(store.getState().boardOpen).toBe(true);
+    store.setBoardOpen(false);
+    expect(store.getState().boardOpen).toBe(false);
+  });
+
   it('setHud replaces the whole hud snapshot', () => {
     const store = createAppStateStore();
     store.setHud(hud);

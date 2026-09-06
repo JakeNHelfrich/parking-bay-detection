@@ -1,0 +1,129 @@
+/* YardBoard — full-viewport glanceable board (yp6.4). One large color block
+   per bay: state word + duration, minimal text, readable from across a room.
+   Consumes tokens only (see src/ui/styles/README.md). */
+
+.board {
+  /* Fills the overlay layer App.tsx mounts it in (covers viewport panel +
+     sidebar; the header stays visible so health pills stay glanceable). */
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--color-page);
+  overflow: auto;
+}
+
+.boardBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.boardTitle {
+  margin: 0;
+  font-size: var(--text-title-size);
+  font-weight: var(--text-title-weight);
+  line-height: var(--leading-tight);
+  color: var(--color-ink);
+}
+
+/* Dismiss mirrors the header ghost-button feel without importing header
+   styles (component-local styling, tokens only). */
+.dismiss {
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-hairline);
+  border-radius: var(--radius-button);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-body-size);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.dismiss:hover {
+  background: var(--color-accent-bg);
+}
+
+.dismiss:focus-visible {
+  outline: var(--border-width) solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* auto-fit: bays share one desktop row at full size, wrap to 2×2 (or
+   further) as the window narrows toward tablet width. */
+.grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 9rem;
+  padding: var(--space-6);
+  border-radius: var(--radius-card);
+  border-left: 6px solid var(--color-muted);
+  box-shadow: var(--shadow-card);
+}
+
+.tileLabel {
+  margin: 0;
+  font-size: var(--text-display-label-size);
+  font-weight: var(--text-title-weight);
+  line-height: var(--leading-tight);
+  color: var(--color-muted);
+}
+
+/* The across-the-room element: the state word. Case stays sentence-case to
+   match the product voice; size and weight do the glancing work. */
+.tileHeadline {
+  margin: 0;
+  font-size: var(--text-display-size);
+  font-weight: var(--text-display-weight);
+  line-height: var(--leading-tight);
+}
+
+.tileSub {
+  margin: 0;
+  font-size: var(--text-body-size);
+  line-height: var(--leading-normal);
+  color: var(--color-muted);
+}
+
+/* Tone blocks reuse the card color language (red FULL / green EMPTY / gray
+   can't-confirm), stepped up to full-tile backgrounds via the same tokens. */
+.tileOccupied {
+  border-left-color: var(--color-danger);
+  background: var(--color-danger-bg);
+}
+
+.tileOccupied .tileHeadline {
+  color: var(--color-danger-strong);
+}
+
+.tileClear {
+  border-left-color: var(--color-ok);
+  background: var(--color-ok-bg);
+}
+
+.tileClear .tileHeadline {
+  color: var(--color-accent-strong);
+}
+
+.tileUnknown {
+  border-left-color: var(--color-muted);
+  background: var(--color-page);
+}
+
+.tileUnknown .tileHeadline {
+  color: var(--color-muted);
+}
