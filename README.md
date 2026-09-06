@@ -127,6 +127,8 @@ Read-only GET endpoints over the durable record — any client (a shift supervis
 
 Validation failures (`bad from`/`to`, unknown granularity, out-of-range shift parameters) answer `422`; a degraded record store answers `503` (mirroring the WebSocket path — see `/health`). Queries are read-only and safe to run against the live service while frames are being recorded.
 
+**History view (frontend, bead rzo.4).** The header's **History** toggle swaps the live yard for the occupancy history board (`src/ui/HistoryPanel.tsx`, fetch glue in `App.tsx`): a horizontal per-bay timeline for a chosen shift — recorded episodes drawn as proportional segments across the window, open episodes extending to the window edge — plus a per-bay dwell column (episode count · total occupied time · "open now"). The zero-effort shift picker offers **Current shift** (default) and **Last night**; shift boundaries mirror the server's rollup defaults (06:00/18:00 UTC — `src/history/shifts.ts` must stay in sync with `api_history.py`). Data loads on demand per view/shift (`src/net/history-api.ts`, `src/history/load.ts`); failures render a "History unavailable" banner, not a broken board. Segment geometry is percentage-of-window UI math — the normalized-coordinate invariant is untouched. Point the client elsewhere with `VITE_HISTORY_API_URL` (default: same origin, like the alerts client).
+
 ### Alerts (`/api/alerts`, bead rzo.5)
 
 A small rules engine derives alerts from the same durable record — no second source of truth, no pixels, and the rules never re-derive occupancy (invariant 5: they read what the frontend reported). Two rules cover the roadmap's conditions:
@@ -160,8 +162,9 @@ A degraded alert surface (store open failure, malformed rules file) degrades exa
 The UI is a React 18 app mounted over the imperative sim pipeline (`frontend/src/main.tsx` → `App.tsx`):
 
 - **State**: a single immutable-snapshot store (`src/state/store.ts`) created at the composition root; React reads it through `useSyncExternalStore` (`src/state/react.ts`). The render loop reads the latest snapshot per frame — no subscriptions, no awaits (decoupled render/inference).
-- **Header** (`src/ui/AppHeader.tsx`): connection pill (green "Live feed connected" / red "Live feed offline"), inference health pill (`InferenceStatus.tsx`: healthy / degraded / offline from connection status + `latencyMs`, `INFERENCE_HEALTHY_MAX_MS` in `src/config.ts`, with live fps/latency stats) — the two status pills form one cluster in the header meta row — plus the camera chip and Start/Stop control. Restacks on mobile (<768px). No brand/logo: the header starts with the status cluster (branding removed).
+- **Header** (`src/ui/AppHeader.tsx`): connection pill (green "Live feed connected" / red "Live feed offline"), inference health pill (`InferenceStatus.tsx`: healthy / degraded / offline from connection status + `latencyMs`, `INFERENCE_HEALTHY_MAX_MS` in `src/config.ts`, with live fps/latency stats) — the two status pills form one cluster in the header meta row — plus the camera chip, the History/Live view toggle (rzo.4), and the Start/Stop control. Restacks on mobile (<768px). No brand/logo: the header starts with the status cluster (branding removed).
 - **Sidebar** (`src/ui/`): one card per bay from `bays.json` (identity = bay id, occupancy from frontend matching), color-coded by state (green clear / red occupied / gray no-data), plus the alerts notification area above it (`AlertsPanel.tsx`, renders only when there is news).
+- **History board** (`src/ui/HistoryPanel.tsx`, rzo.4): replaces the main region while open — per-bay horizontal occupancy timeline for the chosen shift + dwell column, fed on demand from `/api/history` (see the History REST API section above).
 - **The React UI is the HUD.** The 2D overlay canvas (`src/overlay/overlay.ts`) draws only detection boxes + bay rects; the former canvas HUD (fps/latency text, offline banner) was replaced by the header status pills.
 - **Offline/reconnect**: the WebSocket client reconnects with backoff (`src/net/backoff.ts`); while disconnected the sim keeps rendering, the overlay freezes on the last accepted result, and the pill + health card show the offline state until the socket re-opens.
 - **`?gt` dev mode** bypasses the pipeline entirely (no overlay/WS): the sim renders as usual while a secondary loop exports ground-truth JPEG+box pairs (see [Fine-tuning](#fine-tuning-for-the-sim-domain-why-the-weights-are-custom)).
@@ -182,6 +185,7 @@ All knobs are environment variables (see `server/app/config.py`):
 | `PARKING_DB_PATH` | `occupancy.db` | SQLite file for the durable record (occupancy episodes + alerts) |
 | `PARKING_ALERT_RULES` | `alert_rules.json` | Alert thresholds as data (per-bay dwell windows, active hours); missing file = built-in defaults |
 | `PARKING_ALERT_WEBHOOK_URL` | *(unset)* | Webhook URL for alert delivery out of the app; unset = in-app only |
+| `VITE_HISTORY_API_URL` | *(unset)* | Build-time override for the history REST base (`/api/history`); unset = same origin |
 
 Measured inference latency (yolov8n, CPU, Apple Silicon, Ultralytics `bus.jpg`, `conf=0.35`):
 
@@ -287,11 +291,12 @@ parking-bay-detection/
 │   │   ├── App.tsx         # app shell: header, viewport, sidebar
 │   │   ├── ui/             # React components (AppHeader, bay cards, health card, primitives, tokens)
 │   │   ├── state/          # immutable app-state store + React adapter (useSyncExternalStore)
-│   │   ├── sim/            # mountSim bootstrap: capture → detect → overlay glue
+│   │   ├── sim/            # mountSim bootstrap: capture → detect → overlay glue; alert polling
 │   │   ├── scene/          # three.js depot yard: world/camera/sky, bay paint, scenery, rigid truck model + actors, ?gt capture
 │   │   ├── capture/        # canvas → JPEG frame capture + throttling
-│   │   ├── net/            # WebSocket client (reconnect/backoff), frame ID bookkeeping
+│   │   ├── net/            # WebSocket client (reconnect/backoff), frame ID bookkeeping; alerts + history REST clients
 │   │   ├── overlay/        # 2D canvas overlay (detection boxes + bay rects only)
+│   │   ├── history/        # history view model: shift windows, timeline geometry/copy, /api/history loader
 │   │   └── bays/           # bay config loading + occupancy (IoU) logic
 │   ├── public/bays.json    # parking bay definitions (normalized rects)
 │   └── index.html

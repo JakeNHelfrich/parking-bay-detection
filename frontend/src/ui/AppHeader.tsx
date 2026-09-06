@@ -39,6 +39,7 @@ export function AppHeader() {
   const store = useAppStateStore();
   const status = useAppState((state) => state.connectionStatus);
   const simRunning = useAppState((state) => state.simRunning);
+  const view = useAppState((state) => state.view);
   const pill = pillForStatus(status);
 
   return (
@@ -56,9 +57,17 @@ export function AppHeader() {
             {CAMERA_ID}
           </Button>
         </div>
-        <Button onClick={() => store.setSimRunning(!simRunning)}>
-          {simRunning ? 'Stop simulation' : 'Start simulation'}
-        </Button>
+        {/* View toggle (rzo.4): live yard ↔ history board. The sim pipeline
+            unmounts while history is open and remounts on return — its
+            lifecycle is effect-owned, `simRunning` persists in the store. */}
+        <div className={styles.viewControls}>
+          <Button variant="ghost" onClick={() => store.setView(view === 'history' ? 'live' : 'history')}>
+            {view === 'history' ? 'Back to live' : 'History'}
+          </Button>
+          <Button onClick={() => store.setSimRunning(!simRunning)}>
+            {simRunning ? 'Stop simulation' : 'Start simulation'}
+          </Button>
+        </div>
       </div>
     </header>
   );

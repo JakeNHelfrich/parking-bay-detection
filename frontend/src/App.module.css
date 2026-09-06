@@ -124,6 +124,16 @@
   min-width: 0;
 }
 
+/* History board (rzo.4): fills the main region while the live view is
+   swapped out; scrolls independently (12h of episodes can get tall). */
+.historyPanel {
+  min-height: 0;
+  overflow-y: auto;
+  border-radius: var(--radius-viewport);
+  background: var(--color-surface);
+  padding: var(--space-5);
+}
+
 .sidebarHeading {
   display: flex;
   align-items: baseline;

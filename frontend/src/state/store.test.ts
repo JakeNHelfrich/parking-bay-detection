@@ -35,6 +35,7 @@ describe('createAppStateStore', () => {
     expect(state.bayStates).toEqual([]);
     expect(state.hud).toEqual({ frameId: null, latencyMs: null, inferenceMs: null, captureFps: 0 });
     expect(state.simRunning).toBe(false);
+    expect(state.view).toBe('live');
     expect(state.alerts).toEqual([]);
     expect(state.alertsError).toBeNull();
   });
@@ -123,6 +124,23 @@ describe('createAppStateStore', () => {
     store.setDetections(detections);
     store.setDetections({ ...detections, frameId: 43 });
     expect(calls).toBe(1);
+  });
+
+  describe('view switching (rzo.4)', () => {
+    it('toggles between the live yard and the history board', () => {
+      const store = createAppStateStore();
+      store.setView('history');
+      expect(store.getState().view).toBe('history');
+      store.setView('live');
+      expect(store.getState().view).toBe('live');
+    });
+
+    it('keeps other state untouched across a view switch', () => {
+      const store = createAppStateStore();
+      store.setSimRunning(true);
+      store.setView('history');
+      expect(store.getState().simRunning).toBe(true); // sim state survives; remounts on return
+    });
   });
 
   describe('applyBaySnapshot (rzo.6)', () => {

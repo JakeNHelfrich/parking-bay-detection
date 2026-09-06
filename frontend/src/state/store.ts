@@ -14,6 +14,9 @@ import type { ConnectionStatus } from '../net/detect-client';
 import type { BaySnapshotEntry, DetectionsMessage } from '../net/protocol';
 import type { AlertSummary } from '../net/alerts-api';
 
+/** Top-level view the shell renders: the live yard or the history board. */
+export type AppView = 'live' | 'history';
+
 /** HUD figures driving the React health card (latency/fps). */
 export interface HudStats {
   readonly frameId: number | null;
@@ -34,6 +37,8 @@ export interface AppState {
   readonly hud: HudStats;
   /** True while the demo pipeline (render + capture loop) is running. */
   readonly simRunning: boolean;
+  /** Which main region the shell renders (rzo.4): live yard or history. */
+  readonly view: AppView;
   /** Unacknowledged alerts from the durable record (polled REST, rzo.5). */
   readonly alerts: readonly AlertSummary[];
   /** Last alerts-fetch error message, or null while healthy. */
@@ -59,6 +64,8 @@ export interface AppStateStore {
   applyBaySnapshot(entries: readonly BaySnapshotEntry[]): void;
   setHud(hud: HudStats): void;
   setSimRunning(running: boolean): void;
+  /** Switches the main region between the live yard and the history board. */
+  setView(view: AppView): void;
   setAlerts(alerts: readonly AlertSummary[]): void;
   setAlertsError(message: string | null): void;
   removeAlert(id: number): void;
@@ -79,6 +86,7 @@ export function createAppStateStore(): AppStateStore {
     bayStates: [],
     hud: INITIAL_HUD,
     simRunning: false,
+    view: 'live',
     alerts: [],
     alertsError: null,
   };
@@ -133,6 +141,9 @@ export function createAppStateStore(): AppStateStore {
     },
     setSimRunning(running: boolean): void {
       update({ simRunning: running });
+    },
+    setView(view: AppView): void {
+      update({ view });
     },
     setAlerts(alerts: readonly AlertSummary[]): void {
       update({ alerts: [...alerts], alertsError: null });

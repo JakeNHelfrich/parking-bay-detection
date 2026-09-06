@@ -24,6 +24,13 @@
   gap: var(--space-3);
 }
 
+/* View toggle (rzo.4) + sim control grouped as the action cluster. */
+.viewControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 /* Pill + camera chip sub-row; visual no-op on desktop, restacks on mobile.
    Wraps so the live-feed pill, inference pill, and chip still fit on
    narrow phones even as one logical row. */

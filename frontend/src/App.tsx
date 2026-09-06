@@ -15,7 +15,7 @@
  * between Start/Stop.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppStateProvider, useAppState, useAppStateStore } from './state/react';
 import type { AppStateStore } from './state/store';
 import { mountSim } from './sim/bootstrap';
@@ -25,8 +25,21 @@ import {
   type AlertsClient,
 } from './net/alerts-api';
 import { startAlertPolling, type AlertPolling } from './sim/alert-polling';
+import {
+  createHistoryClient,
+  resolveHistoryApiBase,
+  type HistoryClient,
+} from './net/history-api';
+import { loadHistoryRows, type HistoryRow } from './history/load';
+import { shiftWindow, type ShiftKey } from './history/shifts';
+import {
+  dwellCopy,
+  timelineSegments,
+  windowRangeCopy,
+} from './history/timeline-model';
 import { AlertsPanel } from './ui/AlertsPanel';
 import { AppHeader } from './ui/AppHeader';
+import { HistoryPanel } from './ui/HistoryPanel';
 import { ParkingBaysPanel } from './ui/ParkingBaysPanel';
 import { PlayIcon } from './ui/components';
 import styles from './App.module.css';
@@ -48,6 +61,7 @@ function Shell() {
   const store = useAppStateStore();
   const simRunning = useAppState((state) => state.simRunning);
   const bayLayout = useAppState((state) => state.bayLayout);
+  const view = useAppState((state) => state.view);
 
   useEffect(() => {
     const host = simHostRef.current;
@@ -73,23 +87,29 @@ function Shell() {
     <div className={styles.shell}>
       <AppHeader />
       <main className={styles.main}>
-        <section className={styles.viewportPanel} aria-label="Simulator viewport">
-          <div className={styles.simHost} ref={simHostRef} />
-          {simRunning ? null : (
-            <ViewportPlaceholder onStart={() => store.setSimRunning(true)} />
-          )}
-        </section>
-        <aside className={styles.sidebar} aria-label="Parking bays">
-          <div className={styles.sidebarHeading}>
-            <h2 className={styles.sidebarTitle}>Parking bays</h2>
-            {/* N derives from bays.json at runtime — no code change to re-bay. */}
-            <span className={styles.sidebarMeta}>{bayLayout?.bays.length ?? 0} monitored</span>
-          </div>
-          <ParkingBaysPanel />
-          {/* In-app notification area (rzo.5): durable alerts from the record.
-              Renders only when there is news; acks dispatch via polling glue. */}
-          <AlertsAreaShell onAcknowledge={(id) => pollingRef.current?.acknowledge(id)} />
-        </aside>
+        {view === 'history' ? (
+          <HistoryAreaShell />
+        ) : (
+          <>
+            <section className={styles.viewportPanel} aria-label="Simulator viewport">
+              <div className={styles.simHost} ref={simHostRef} />
+              {simRunning ? null : (
+                <ViewportPlaceholder onStart={() => store.setSimRunning(true)} />
+              )}
+            </section>
+            <aside className={styles.sidebar} aria-label="Parking bays">
+              <div className={styles.sidebarHeading}>
+                <h2 className={styles.sidebarTitle}>Parking bays</h2>
+                {/* N derives from bays.json at runtime — no code change to re-bay. */}
+                <span className={styles.sidebarMeta}>{bayLayout?.bays.length ?? 0} monitored</span>
+              </div>
+              <ParkingBaysPanel />
+              {/* In-app notification area (rzo.5): durable alerts from the record.
+                  Renders only when there is news; acks dispatch via polling glue. */}
+              <AlertsAreaShell onAcknowledge={(id) => pollingRef.current?.acknowledge(id)} />
+            </aside>
+          </>
+        )}
       </main>
     </div>
   );
@@ -112,6 +132,69 @@ function AlertsAreaShell(props: { readonly onAcknowledge: (id: number) => void }
       now={new Date()}
       onAcknowledge={props.onAcknowledge}
     />
+  );
+}
+
+/**
+ * History board (rzo.4): fetch-on-demand glue between `/api/history` and the
+ * stateless `HistoryPanel`. Data lives in local shell state (not the store):
+ * unlike alerts — which are pushed continuously and belong to the whole app —
+ * history is read only while its view is open, so a store round-trip would
+ * add surface without adding sharing. Loads re-run on shift change or bay-map
+ * load; a monotonically increasing sequence token discards responses that
+ * arrive after a newer load started (stale-response guard, not a queue).
+ */
+function HistoryAreaShell() {
+  const bayLayout = useAppState((state) => state.bayLayout);
+  const [shiftKey, setShiftKey] = useState<ShiftKey>('current');
+  const [rows, setRows] = useState<readonly HistoryRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const seqRef = useRef(0);
+
+  useEffect(() => {
+    const seq = ++seqRef.current;
+    const client: HistoryClient = createHistoryClient(
+      resolveHistoryApiBase(import.meta.env.VITE_HISTORY_API_URL, window.location),
+    );
+    const bayIds = bayLayout?.bays.map((bay) => bay.id) ?? [];
+    const shift = shiftWindow(new Date(), shiftKey);
+    setLoading(true);
+    setError(null);
+    loadHistoryRows(client, bayIds, {
+      from: shift.from.toISOString(),
+      to: shift.to.toISOString(),
+    })
+      .then((loaded) => {
+        if (seqRef.current !== seq) return; // a newer load superseded this one
+        setRows(loaded);
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (seqRef.current !== seq) return;
+        setError(err instanceof Error ? err.message : String(err));
+        setLoading(false);
+      });
+  }, [shiftKey, bayLayout]);
+
+  // Geometry/copy derive from the same pure window function the fetch used;
+  // recomputed per render (display-only, cheap).
+  const shift = shiftWindow(new Date(), shiftKey);
+  return (
+    <section className={styles.historyPanel} aria-label="Occupancy history board">
+      <HistoryPanel
+        shiftKey={shiftKey}
+        windowRange={windowRangeCopy(shift)}
+        rows={rows.map((row) => ({
+          bayId: row.bayId,
+          segments: timelineSegments(row.intervals, shift),
+          dwellCopy: dwellCopy(row.dwell),
+        }))}
+        loading={loading}
+        error={error}
+        onShiftChange={setShiftKey}
+      />
+    </section>
   );
 }
 
