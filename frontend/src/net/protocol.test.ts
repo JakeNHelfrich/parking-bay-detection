@@ -27,6 +27,15 @@ describe('helloMessage / frameHeaderMessage', () => {
     });
   });
 
+  it('includes the bay-map version in the hello when provided', () => {
+    expect(JSON.parse(helloMessage(960, 540, '1a2b3c4d'))).toEqual({
+      type: 'hello',
+      captureWidth: 960,
+      captureHeight: 540,
+      bayMapVersion: '1a2b3c4d',
+    });
+  });
+
   it('serializes the per-frame header', () => {
     expect(JSON.parse(frameHeaderMessage(412))).toEqual({ type: 'frame', frameId: 412 });
   });

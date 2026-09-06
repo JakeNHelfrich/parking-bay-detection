@@ -89,6 +89,10 @@ class Settings:
     )
     host: str = field(default_factory=lambda: _env_str("PARKING_HOST", "127.0.0.1"))
     port: int = field(default_factory=lambda: _env_int("PARKING_PORT", 8000))
+    # SQLite file backing the durable bay-occupancy record (bead rzo.2).
+    # History must survive restarts, so this is a real file by default;
+    # tests point it at a temporary path.
+    db_path: str = field(default_factory=lambda: _env_str("PARKING_DB_PATH", "occupancy.db"))
     # Directory containing the built frontend (frontend/dist) to serve at "/".
     # Single-container deploys bake the build in here; empty/missing dir means
     # "not served" (local dev uses the Vite dev server instead).

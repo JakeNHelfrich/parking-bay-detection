@@ -59,6 +59,29 @@ export function parseBayLayout(raw: unknown): BayLayout | null {
 }
 
 /**
+ * Content version of a bay map: a deterministic hash of the bay definitions.
+ *
+ * Sent in the WS `hello` and stamped onto every occupancy episode the server
+ * records, so a bay-layout change over time never corrupts history: each
+ * episode carries the map it was observed under. Bay ids are stable across
+ * layouts (invariant 5); the hash covers ids, sides, rects, and their order.
+ */
+export function bayMapVersion(bays: readonly BayDef[]): string {
+  // FNV-1a 32-bit over a canonical "id,side,x,y,w,h;..." rendering (field
+  // order fixed, so object key insertion order cannot change the hash),
+  // rendered as 8 hex chars.
+  const serialized = bays
+    .map((bay) => `${bay.id},${bay.side},${bay.rect.join(',')}`)
+    .join(';');
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < serialized.length; i += 1) {
+    hash ^= serialized.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+/**
  * Fetches and parses `bays.json` (served from `public/`, unbundled).
  * Resolves null on fetch/parse failure so the sim keeps running without
  * bay occupancy instead of crashing startup.

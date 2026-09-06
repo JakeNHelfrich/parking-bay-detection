@@ -2,8 +2,11 @@
 
 Wire protocol (backend side):
 
-- Client sends ``{"type": "hello", "captureWidth": int, "captureHeight": int}``
-  once per session to negotiate capture size.
+- Client sends ``{"type": "hello", "captureWidth": int, "captureHeight": int,
+  "bayMapVersion": str?}`` once per session to negotiate capture size and
+  (once the frontend's bay map has loaded) identify the bay-map content the
+  session's bay-state reports were made under. The version is required
+  before any ``bayState`` can be recorded.
 - For each frame, the client sends a text header
   ``{"type": "frame", "frameId": int}`` followed by a binary message containing
   exactly one JPEG. The server replies on the same socket with
@@ -15,9 +18,12 @@ Wire protocol (backend side):
   "events": [{"bayId": int, "occupied": bool, "confidence": float?}]}`` —
   one message per frame that confirmed at least one transition. Occupancy is
   derived entirely in the frontend; the server only records what it is told
-  and acknowledges with ``{"type": "bayStateAck", "frameId", "accepted"}``
-  (same frameId). Malformed batches get an ``error`` reply; the socket stays
-  open. Confidence is present only when ``occupied`` is true.
+  (durable SQLite occupancy record, ``app/recorder.py``) and acknowledges
+  with ``{"type": "bayStateAck", "frameId", "accepted"}`` (same frameId).
+  Malformed batches get an ``error`` reply; the socket stays open. Confidence
+  is present only when ``occupied`` is true. Every recorded episode is
+  stamped with the session's ``bayMapVersion`` so bay-layout changes over
+  time never corrupt history.
 - Under load the service coalesces frames (latest wins): while one frame is
   being decoded/inferred, a newer complete frame replaces the queued one, and
   superseded frames are skipped without a reply. Clients match replies by
@@ -32,6 +38,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -51,6 +58,7 @@ from app.detection import (
     decode_jpeg,
     detections_to_wire,
 )
+from app.recorder import OccupancyRecorder
 
 settings: Settings = load_settings()
 
@@ -61,6 +69,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.detector: Detector | None = None
     app.state.detector_error: str | None = None
     app.state.model_label: str = settings.model_name or "unknown"
+    # Durable occupancy record: opened once at startup, closed at shutdown.
+    # A failure to open degrades recording (bayState replies with an error)
+    # instead of crashing the service — surfaced via /health like the model.
+    app.state.recorder: OccupancyRecorder | None = None
+    app.state.recorder_error: str | None = None
+    try:
+        app.state.recorder = OccupancyRecorder(settings.db_path)
+    except sqlite3.Error as exc:
+        app.state.recorder_error = str(exc)
     try:
         detector = create_detector(settings)
         # Lazily-loaded backends expose ensure_loaded; force the weight load
@@ -74,6 +91,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Keep the app up: /health reports 503 instead of crashing the service.
         app.state.detector_error = str(exc)
     yield
+    recorder: OccupancyRecorder | None = app.state.recorder
+    if recorder is not None:
+        recorder.close()
 
 
 app = FastAPI(title="parking-bay-detection", version="0.1.0", lifespan=lifespan)
@@ -81,7 +101,10 @@ app = FastAPI(title="parking-bay-detection", version="0.1.0", lifespan=lifespan)
 
 @app.get("/health")
 def health() -> JSONResponse:
-    """Liveness + model status. 503 when the detector failed to load."""
+    """Liveness + model + recorder status. 503 when the detector failed to load."""
+    content: dict[str, Any] = {"status": "ok", "model": app.state.model_label}
+    if app.state.recorder is None:
+        content["recorder"] = {"status": "error", "detail": app.state.recorder_error}
     if app.state.detector is None:
         return JSONResponse(
             status_code=503,
@@ -91,10 +114,7 @@ def health() -> JSONResponse:
                 "detail": app.state.detector_error,
             },
         )
-    return JSONResponse(
-        status_code=200,
-        content={"status": "ok", "model": app.state.model_label},
-    )
+    return JSONResponse(status_code=200, content=content)
 
 
 def _validate_hello(message: dict[str, Any]) -> str | None:
@@ -105,6 +125,12 @@ def _validate_hello(message: dict[str, Any]) -> str | None:
         return "hello.captureWidth must be a positive integer"
     if not isinstance(height, int) or isinstance(height, bool) or height <= 0:
         return "hello.captureHeight must be a positive integer"
+    # bayMapVersion is optional (clients without a bay map never send
+    # bayState) but must be a sane string when present — it is stamped onto
+    # every recorded occupancy episode.
+    version = message.get("bayMapVersion")
+    if version is not None and (not isinstance(version, str) or not version or len(version) > 128):
+        return "hello.bayMapVersion must be a non-empty string (max 128 chars)"
     return None
 
 
@@ -161,6 +187,9 @@ async def ws_detect(socket: WebSocket) -> None:
 
     send_lock = asyncio.Lock()
     pending_frame_id: int | None = None
+    # Bay-map content hash from the session hello; required before bayState
+    # batches can be recorded (every stored episode is stamped with it).
+    session_map_version: str | None = None
     # Newest complete frame awaiting inference: (frameId, payload, receivedAt).
     latest_frame: tuple[int, bytes, float] | None = None
     processing = False
@@ -276,8 +305,12 @@ async def ws_detect(socket: WebSocket) -> None:
             error = _validate_hello(parsed)
             if error is not None:
                 await send_json_safe({"type": "error", "message": error})
+                continue
             # Valid hello needs no reply; capture size is recorded for later
             # milestones and never leaks into normalized coordinates.
+            version = parsed.get("bayMapVersion")
+            if isinstance(version, str) and version:
+                session_map_version = version
             continue
 
         if msg_type == "frame":
@@ -294,10 +327,28 @@ async def ws_detect(socket: WebSocket) -> None:
                 await send_json_safe({"type": "error", "message": error})
                 continue
             events: list[Any] = parsed["events"]
+            recorder: OccupancyRecorder | None = app.state.recorder
+            if recorder is None:
+                await send_json_safe(
+                    {"type": "error", "message": "recorder unavailable; see /health"}
+                )
+                continue
+            if session_map_version is None:
+                await send_json_safe(
+                    {
+                        "type": "error",
+                        "message": (
+                            "bayState rejected: no bay map version "
+                            "(send hello with bayMapVersion first)"
+                        ),
+                    }
+                )
+                continue
             # Occupancy math lives in the frontend (invariant 5): the server
-            # records what it is told, never re-derives it. Persistence lands
-            # with the history milestone; for now the batch is acknowledged
-            # (echoing frameId) so the sender knows it was received.
+            # records what it is told, never re-derives it. Each episode is
+            # stamped with the session's bay map version so layout changes
+            # over time never corrupt history.
+            recorder.record(events, session_map_version, parsed["frameId"])
             await send_json_safe(
                 {
                     "type": "bayStateAck",

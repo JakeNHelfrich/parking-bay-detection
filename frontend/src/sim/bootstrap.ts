@@ -17,7 +17,7 @@ import {
 } from '../net/protocol';
 import { isStaleFrame } from '../net/stale-frame';
 import { resolveDetectWsUrl } from '../net/ws-url';
-import { loadBayLayout } from '../bays/bay-defs';
+import { loadBayLayout, bayMapVersion } from '../bays/bay-defs';
 import { computeBayStates } from '../bays/occupancy';
 import { BayStateTracker } from '../bays/transitions';
 import { Overlay } from '../overlay/overlay';
@@ -112,8 +112,13 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
       store.setConnectionStatus(status);
     },
   });
-  client.connect();
-  teardown.push(() => client.close());
+  // Dispose-before-load guard: if the sim is torn down before bays.json
+  // resolves, the load callback must not (re)connect the closed client.
+  let clientDisposed = false;
+  teardown.push(() => {
+    clientDisposed = true;
+    client.close();
+  });
 
   // Bay occupancy (M5): bays.json is data, not code — fetched at runtime from
   // public/, validated, and purely informational. A failed load just means no
@@ -122,13 +127,22 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
   void loadBayLayout().then((layout) => {
     if (layout === null) {
       console.warn('[bays] bays.json missing or invalid — bay overlay disabled');
-      return;
+    } else {
+      bayLayout = layout;
+      overlay.setBays(layout.bays);
+      store.setBayLayout(layout);
+      // Bay states are (re)derived on the next accepted detections message,
+      // exactly as before this refactor.
+      // Hello carries the map version (bead rzo.2): every occupancy episode
+      // the server records is stamped with it, so layout changes over time
+      // never corrupt history. bayState is only ever sent when bayLayout is
+      // loaded, so the version is always known by the first report.
+      client.bayMapVersion = bayMapVersion(layout.bays);
     }
-    bayLayout = layout;
-    overlay.setBays(layout.bays);
-    store.setBayLayout(layout);
-    // Bay states are (re)derived on the next accepted detections message,
-    // exactly as before this refactor.
+    // Connect only after the bay map resolves (loaded or failed) so hello
+    // carries the map version when one exists. The fetch is a tiny local
+    // static file; a failed load still resolves and connects without one.
+    if (!clientDisposed) client.connect();
   });
 
   let latestFrameId = 0;

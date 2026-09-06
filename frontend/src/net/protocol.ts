@@ -59,9 +59,17 @@ export interface BayStateAckMessage {
 
 export type ServerMessage = DetectionsMessage | ErrorMessage | BayStateAckMessage;
 
-/** Session header sent once after the socket opens (capture size negotiation). */
-export function helloMessage(captureWidth: number, captureHeight: number): string {
-  return JSON.stringify({ type: 'hello', captureWidth, captureHeight });
+/** Session hello; the bay-map version is included once bays.json has loaded. */
+export function helloMessage(
+  captureWidth: number,
+  captureHeight: number,
+  bayMapVersion?: string,
+): string {
+  return JSON.stringify(
+    bayMapVersion === undefined
+      ? { type: 'hello', captureWidth, captureHeight }
+      : { type: 'hello', captureWidth, captureHeight, bayMapVersion },
+  );
 }
 
 /** Per-frame text header sent immediately before each binary JPEG. */

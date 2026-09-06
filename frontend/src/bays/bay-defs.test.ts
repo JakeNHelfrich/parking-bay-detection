@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadBayLayout, parseBayLayout, type BayLayout } from './bay-defs';
+import { bayMapVersion, loadBayLayout, parseBayLayout, type BayLayout } from './bay-defs';
 
 const validLayout: BayLayout = {
   version: 1,
@@ -93,5 +93,39 @@ describe('loadBayLayout', () => {
     );
     expect(await loadBayLayout()).toBeNull();
     vi.unstubAllGlobals();
+  });
+});
+
+describe('bayMapVersion', () => {
+  it('is deterministic for the same bays', () => {
+    expect(bayMapVersion(validLayout.bays)).toBe(bayMapVersion(validLayout.bays));
+  });
+
+  it('does not depend on object identity or key insertion order', () => {
+    const rebuilt = validLayout.bays.map((bay) => ({
+      rect: [...bay.rect] as [number, number, number, number],
+      side: bay.side,
+      id: bay.id,
+    }));
+    expect(bayMapVersion(rebuilt)).toBe(bayMapVersion(validLayout.bays));
+  });
+
+  it('changes when a bay rect moves (layout edit → new version)', () => {
+    const moved = validLayout.bays.map((bay, i) =>
+      i === 1 ? { ...bay, rect: [0.5, 0.5, 0.2, 0.1] as const } : bay,
+    );
+    expect(bayMapVersion(moved)).not.toBe(bayMapVersion(validLayout.bays));
+  });
+
+  it('changes when a bay is added or reordered', () => {
+    const added = [...validLayout.bays, { id: 2, side: 'north' as const, rect: [0, 0, 0.1, 0.1] as const }];
+    const reordered = [...validLayout.bays].reverse();
+    const base = bayMapVersion(validLayout.bays);
+    expect(bayMapVersion(added)).not.toBe(base);
+    expect(bayMapVersion(reordered)).not.toBe(base);
+  });
+
+  it('renders as a non-empty 8-char hex string', () => {
+    expect(bayMapVersion(validLayout.bays)).toMatch(/^[0-9a-f]{8}$/);
   });
 });

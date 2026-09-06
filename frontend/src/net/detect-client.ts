@@ -31,6 +31,13 @@ export interface DetectClientOptions {
  */
 export class DetectClient {
   private readonly options: DetectClientOptions;
+  /**
+   * Bay-map content version (see `bayMapVersion` in `bays/bay-defs.ts`) sent
+   * in each hello so recorded occupancy episodes carry provenance. Set once
+   * bays.json resolves; hello goes out on connect, so bootstrap connects
+   * only after the bay map has resolved.
+   */
+  bayMapVersion: string | undefined;
   private socket: WebSocket | null = null;
   private attempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -104,7 +111,9 @@ export class DetectClient {
     socket.addEventListener('open', () => {
       this.attempt = 0; // successful connect resets the backoff sequence
       this.options.onStatus('online');
-      socket.send(helloMessage(this.options.captureWidth, this.options.captureHeight));
+      socket.send(
+        helloMessage(this.options.captureWidth, this.options.captureHeight, this.bayMapVersion),
+      );
     });
 
     socket.addEventListener('message', (event: MessageEvent) => {

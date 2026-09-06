@@ -33,11 +33,13 @@ A TypeScript + Three.js frontend renders a simulated **depot yard** — a wareho
 
 **Frontend → Backend** — binary WebSocket messages (single JPEG frame), with two small text control messages:
 
-A session header sent once to negotiate capture size:
+A session header sent once to negotiate capture size (and, once the bay map has loaded, the bay-map content version used to provenance occupancy history):
 
 ```json
-{ "type": "hello", "captureWidth": 960, "captureHeight": 540 }
+{ "type": "hello", "captureWidth": 960, "captureHeight": 540, "bayMapVersion": "1a2b3c4d" }
 ```
+
+`bayMapVersion` is a content hash of the bay definitions (`bayMapVersion()` in `src/bays/bay-defs.ts`); it is optional, but a `bayState` batch is only recorded when the session's hello carried one — every recorded occupancy episode is stamped with it, so bay-layout changes over time never corrupt history.
 
 A per-frame text header sent immediately before each binary JPEG, so the server can echo the frame ID:
 
@@ -63,6 +65,8 @@ A batched report of **confirmed** bay occupancy transitions (see below), sent on
 ```json
 { "type": "bayStateAck", "frameId": 412, "accepted": 2 }
 ```
+
+**Durable record.** Accepted batches are persisted by `server/app/recorder.py` to SQLite (`PARKING_DB_PATH`, default `occupancy.db`) as per-bay occupancy episodes — bay id, state, `since`/`until` (server clock, ISO 8601 UTC), source frame ids, confidence, and the session's `bayMapVersion`. Reporting is idempotent (a duplicate open is a no-op; empty→empty is a no-op) and open episodes survive a restart untouched — the restart-persistence test is the acceptance gate (`server/tests/test_recorder.py`, `test_ws_detect.py::TestBayStateRecording`).
 
 **Backend → Frontend** — JSON text message per frame processed:
 
