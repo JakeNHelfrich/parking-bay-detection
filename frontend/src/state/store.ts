@@ -9,7 +9,7 @@
  */
 
 import type { BayLayout } from '../bays/bay-defs';
-import type { BayState } from '../bays/occupancy';
+import type { StableBayState } from '../bays/stabilizer';
 import type { ConnectionStatus } from '../net/detect-client';
 import type { BaySnapshotEntry, DetectionsMessage } from '../net/protocol';
 import type { AlertSummary } from '../net/alerts-api';
@@ -32,8 +32,12 @@ export interface AppState {
   readonly latestDetections: DetectionsMessage | null;
   /** Validated bay map from bays.json, or null when missing/invalid. */
   readonly bayLayout: BayLayout | null;
-  /** Bay occupancy derived from `latestDetections` × `bayLayout` (may be stale-safe empty). */
-  readonly bayStates: readonly BayState[];
+  /**
+   * Stabilized bay states (yp6.1): per-frame occupancy after time-based
+   * debounce + hysteresis, each stamped with `sinceMs` set only on confirmed
+   * transitions. May be empty before the first detections frame.
+   */
+  readonly bayStates: readonly StableBayState[];
   readonly hud: HudStats;
   /** True while the demo pipeline (render + capture loop) is running. */
   readonly simRunning: boolean;
@@ -53,7 +57,7 @@ export interface AppStateStore {
   setConnectionStatus(status: ConnectionStatus): void;
   setDetections(message: DetectionsMessage): void;
   setBayLayout(layout: BayLayout): void;
-  setBayStates(states: readonly BayState[]): void;
+  setBayStates(states: readonly StableBayState[]): void;
   /**
    * Merges a late-joiner `baySnapshot` (rzo.6) into `bayStates`: bays with a
    * recorded open episode become occupied; unmentioned bays keep whatever
@@ -118,17 +122,27 @@ export function createAppStateStore(): AppStateStore {
     setBayLayout(layout: BayLayout): void {
       update({ bayLayout: layout });
     },
-    setBayStates(states: readonly BayState[]): void {
+    setBayStates(states: readonly StableBayState[]): void {
       update({ bayStates: [...states] });
     },
 
     applyBaySnapshot(entries: readonly BaySnapshotEntry[]): void {
       if (entries.length === 0) return; // nothing recorded: keep current view
       const snapshotStates = new Map(
-        entries.map((entry) => [
-          entry.bayId,
-          { bayId: entry.bayId, occupied: true, confidence: entry.confidence } satisfies BayState,
-        ]),
+        entries.map((entry) => {
+          // Episode open time (server clock) becomes the bay's `sinceMs` —
+          // recorded provenance, not a re-derivation (invariant 5).
+          const sinceMs = Date.parse(entry.since);
+          return [
+            entry.bayId,
+            {
+              bayId: entry.bayId,
+              occupied: true,
+              confidence: entry.confidence,
+              sinceMs: Number.isFinite(sinceMs) ? sinceMs : Date.now(),
+            } satisfies StableBayState,
+          ] as const;
+        }),
       );
       const merged = state.bayStates.map((existing) => snapshotStates.get(existing.bayId) ?? existing);
       for (const [bayId, state] of snapshotStates) {

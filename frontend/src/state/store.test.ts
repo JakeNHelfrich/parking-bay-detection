@@ -11,6 +11,9 @@ const detections: DetectionsMessage = {
   detections: [{ cls: 'truck', conf: 0.95, bbox: [0.1, 0.1, 0.2, 0.2] }],
 };
 
+/** Epoch ms for the snapshot fixture episode's server-clock open time. */
+const T_FIX = Date.parse('2026-09-06T08:00:00+00:00');
+
 const layout: BayLayout = { version: 1, bays: [{ id: 0, side: 'north', rect: [0.1, 0.1, 0.2, 0.2] }] };
 
 const hud: HudStats = { frameId: 42, latencyMs: 88, inferenceMs: 71, captureFps: 11.5 };
@@ -62,10 +65,10 @@ describe('createAppStateStore', () => {
   it('setBayLayout / setBayStates publish independently', () => {
     const store = createAppStateStore();
     store.setBayLayout(layout);
-    store.setBayStates([{ bayId: 0, occupied: true }]);
+    store.setBayStates([{ bayId: 0, occupied: true, sinceMs: T_FIX }]);
     const state = store.getState();
     expect(state.bayLayout).toBe(layout);
-    expect(state.bayStates).toEqual([{ bayId: 0, occupied: true }]);
+    expect(state.bayStates).toEqual([{ bayId: 0, occupied: true, sinceMs: T_FIX }]);
   });
 
   it('setHud replaces the whole hud snapshot', () => {
@@ -155,23 +158,25 @@ describe('createAppStateStore', () => {
     it('marks recorded bays occupied and leaves unmentioned bays alone', () => {
       const store = createAppStateStore();
       store.setBayStates([
-        { bayId: 0, occupied: false, confidence: undefined },
-        { bayId: 1, occupied: true, confidence: 0.5 },
+        { bayId: 0, occupied: false, confidence: undefined, sinceMs: T_FIX - 1000 },
+        { bayId: 1, occupied: true, confidence: 0.5, sinceMs: T_FIX - 2000 },
       ]);
       store.applyBaySnapshot([entry(1, 0.9), entry(3)]);
       const states = store.getState().bayStates;
       expect(states).toEqual([
-        { bayId: 0, occupied: false, confidence: undefined }, // untouched
-        { bayId: 1, occupied: true, confidence: 0.9 }, // refreshed by record
-        { bayId: 3, occupied: true, confidence: undefined }, // new from record
+        { bayId: 0, occupied: false, confidence: undefined, sinceMs: T_FIX - 1000 }, // untouched
+        { bayId: 1, occupied: true, confidence: 0.9, sinceMs: T_FIX }, // refreshed by record
+        { bayId: 3, occupied: true, confidence: undefined, sinceMs: T_FIX }, // new from record
       ]);
     });
 
     it('treats an empty snapshot as "nothing recorded", not "everything empty"', () => {
       const store = createAppStateStore();
-      store.setBayStates([{ bayId: 0, occupied: true, confidence: 0.8 }]);
+      store.setBayStates([{ bayId: 0, occupied: true, confidence: 0.8, sinceMs: T_FIX }]);
       store.applyBaySnapshot([]);
-      expect(store.getState().bayStates).toEqual([{ bayId: 0, occupied: true, confidence: 0.8 }]);
+      expect(store.getState().bayStates).toEqual([
+        { bayId: 0, occupied: true, confidence: 0.8, sinceMs: T_FIX },
+      ]);
     });
 
     it('does not touch the alerts surface', () => {

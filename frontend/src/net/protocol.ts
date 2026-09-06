@@ -38,7 +38,7 @@ export interface BayStateEvent {
 
 /**
  * Client → server: confirmed bay occupancy transitions (see
- * `src/bays/transitions.ts`), batched into one message per frame that
+ * `src/bays/stabilizer.ts`), batched into one message per frame that
  * produced at least one transition. `frameId` identifies the detections
  * frame that confirmed the transitions. Occupancy math stays frontend-only
  * (invariant 5) — the server records state, it never derives it.

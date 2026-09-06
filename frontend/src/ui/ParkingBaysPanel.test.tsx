@@ -12,6 +12,9 @@ import { AppStateProvider } from '../state/react';
 import type { BayLayout } from '../bays/bay-defs';
 import { bayLabel, bayStatusCopy, bayTone, ParkingBaysPanel } from './ParkingBaysPanel';
 
+/** Arbitrary fixture timestamp for stabilized bay states (epoch ms). */
+const T_FIX = 1_700_000_000_000;
+
 const layout: BayLayout = {
   version: 1,
   bays: [
@@ -103,8 +106,8 @@ describe('ParkingBaysPanel', () => {
     store.setBayLayout(layout);
     store.setSimRunning(true); // live copy only exists once the sim runs
     store.setBayStates([
-      { bayId: 1, occupied: true, confidence: 0.87 },
-      { bayId: 0, occupied: false, confidence: 0.98 },
+      { bayId: 1, occupied: true, confidence: 0.87, sinceMs: T_FIX },
+      { bayId: 0, occupied: false, confidence: 0.98, sinceMs: T_FIX },
     ]);
     const html = renderWithStore(store);
     expect(html).toContain('Occupied · truck detected');
@@ -122,7 +125,7 @@ describe('ParkingBaysPanel', () => {
   it('reads Waiting to start on every card while the sim is idle', () => {
     const store = createAppStateStore();
     store.setBayLayout(layout);
-    store.setBayStates([{ bayId: 1, occupied: true, confidence: 0.87 }]);
+    store.setBayStates([{ bayId: 1, occupied: true, confidence: 0.87, sinceMs: T_FIX }]);
     const html = renderWithStore(store); // simRunning defaults to false
     expect(html).toContain('Waiting to start');
     expect(html).not.toContain('Occupied · truck detected');
@@ -137,8 +140,8 @@ describe('ParkingBaysPanel', () => {
     const store = createAppStateStore();
     store.setBayLayout(layout);
     store.setBayStates([
-      { bayId: 0, occupied: true, confidence: 0.9 }, // occupied
-      { bayId: 1, occupied: false, confidence: 0.95 }, // clear
+      { bayId: 0, occupied: true, confidence: 0.9, sinceMs: T_FIX }, // occupied
+      { bayId: 1, occupied: false, confidence: 0.95, sinceMs: T_FIX }, // clear
       // id 7 absent -> unknown fallback
     ]);
     const html = renderWithStore(store);

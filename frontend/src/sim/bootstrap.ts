@@ -20,7 +20,7 @@ import { isStaleFrame } from '../net/stale-frame';
 import { resolveDetectWsUrl } from '../net/ws-url';
 import { loadBayLayout, bayMapVersion } from '../bays/bay-defs';
 import { computeBayStates } from '../bays/occupancy';
-import { BayStateTracker } from '../bays/transitions';
+import { BayStateStabilizer } from '../bays/stabilizer';
 import { Overlay } from '../overlay/overlay';
 import { createBayField } from '../scene/bays';
 import { createDepotScenery } from '../scene/scenery';
@@ -70,12 +70,13 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
 
   const capture = new FrameCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT);
 
-  // Confirmed-transition tracking (bead rzo.1): bay states are re-derived
-  // every accepted frame; only transitions that hold for
-  // TRANSITION_CONFIRMATION_FRAMES are reported to the server via `bayState`
-  // batches. The frontend is the one place with the bay map — occupancy math
-  // stays here (invariant 5); the server only records what it is told.
-  const bayTracker = new BayStateTracker();
+  // Stabilized bay-state layer (rzo.1, yp6.1): bay states are re-derived
+  // every accepted frame; only transitions that hold their directional time
+  // hold (debounce + hysteresis, in seconds) are published to the store and
+  // reported to the server via `bayState` batches. The frontend is the one
+  // place with the bay map — occupancy math stays here (invariant 5); the
+  // server only records what it is told.
+  const stabilizer = new BayStateStabilizer();
 
   const client = new DetectClient({
     url: wsUrl,
@@ -111,12 +112,17 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
       store.setDetections(message);
       if (bayLayout !== null) {
         const states = computeBayStates(bayLayout.bays, message.detections);
-        overlay.setBayStates(states);
-        store.setBayStates(states);
+        // The board (overlay + store) shows only stabilized states (yp6.1):
+        // per-frame results feed the stabilizer, which publishes a change
+        // once it has held its directional hold time. `sinceMs` stamps on
+        // the confirmed states come from the stabilizer, not the raw frame.
+        const transitions = stabilizer.update(states, Date.now());
+        const stable = stabilizer.confirmedStates;
+        overlay.setBayStates(stable);
+        store.setBayStates(stable);
         // Fire-and-forget: the batch is dropped (never buffered) when the
-        // socket is down; the tracker keeps its confirmed state, so no
+        // socket is down; the stabilizer keeps its confirmed state, so no
         // duplicate report is sent once reconnected.
-        const transitions = bayTracker.update(states);
         if (transitions.length > 0) {
           client.sendBayState(message.frameId, transitions);
         }
