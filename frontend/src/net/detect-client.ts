@@ -1,7 +1,10 @@
 import {
+  bayStateMessage,
   frameHeaderMessage,
   helloMessage,
+  isBayStateAckMessage,
   parseServerMessage,
+  type BayStateEvent,
   type ServerMessage,
 } from './protocol';
 import { reconnectDelayMs } from './backoff';
@@ -79,6 +82,19 @@ export class DetectClient {
     return true;
   }
 
+  /**
+   * Sends one batched `bayState` message (confirmed occupancy transitions).
+   * Fire-and-forget like `sendFrame`: returns false when the socket is not
+   * open — the batch is dropped, never buffered. Does not participate in
+   * frame backpressure (the ack is not a frame reply).
+   */
+  sendBayState(frameId: number, events: readonly BayStateEvent[]): boolean {
+    const socket = this.socket;
+    if (socket === null || socket.readyState !== WebSocket.OPEN) return false;
+    socket.send(bayStateMessage(frameId, events));
+    return true;
+  }
+
   private openSocket(): void {
     this.options.onStatus('connecting');
     const socket = new WebSocket(this.options.url);
@@ -95,10 +111,11 @@ export class DetectClient {
       // Binary data never arrives server→client; only JSON text is expected.
       const parsed = parseServerMessage(event.data);
       if (parsed !== null) {
-        // Any server message (detections or error) settles the pending frame —
-        // the server replies to every frame it processes and skips only
-        // frames superseded by a newer one, which cannot be the pending one.
-        this.pendingFrameId = null;
+        // Acks report bayState batches, not frames — only a detections or
+        // error reply settles the pending frame.
+        if (!isBayStateAckMessage(parsed)) {
+          this.pendingFrameId = null;
+        }
         this.options.onMessage(parsed);
       }
     });

@@ -110,6 +110,82 @@ class TestFramePipeline:
             ws.close()
 
 
+class TestBayState:
+    """bayState batches: frontend-reported confirmed transitions (rzo.1).
+
+    The server never derives bay state (invariant 5) — it validates the
+    batch shape and acknowledges it, echoing the batch's frameId.
+    """
+
+    @staticmethod
+    def send_batch(socket: Any, frame_id: int, events: list[dict[str, Any]]) -> None:
+        socket.send_json({"type": "bayState", "frameId": frame_id, "events": events})
+
+    def test_valid_batch_is_acked_with_frame_id_echo(self, client: TestClient) -> None:
+        with client.websocket_connect("/ws/detect") as ws:
+            send_hello(ws)
+            self.send_batch(
+                ws,
+                412,
+                [
+                    {"bayId": 0, "occupied": True, "confidence": 0.87},
+                    {"bayId": 2, "occupied": False},
+                ],
+            )
+            ack: dict[str, Any] = ws.receive_json()
+            assert ack == {"type": "bayStateAck", "frameId": 412, "accepted": 2}
+            # Socket remains fully usable for frames afterwards.
+            send_frame(ws, 413, make_jpeg())
+            assert read_detections(ws)["frameId"] == 413
+
+    def test_int_confidence_is_accepted(self, client: TestClient) -> None:
+        with client.websocket_connect("/ws/detect") as ws:
+            send_hello(ws)
+            self.send_batch(ws, 1, [{"bayId": 3, "occupied": True, "confidence": 1}])
+            assert ws.receive_json()["accepted"] == 1
+
+    @pytest.mark.parametrize(
+        ("frame_id", "events"),
+        [
+            (-1, [{"bayId": 0, "occupied": True}]),
+            ("412", [{"bayId": 0, "occupied": True}]),
+            (412, []),
+            (412, "nope"),
+            (412, ["not an object"]),
+            (412, [{"occupied": True}]),
+            (412, [{"bayId": -1, "occupied": True}]),
+            (412, [{"bayId": 0, "occupied": "yes"}]),
+            (412, [{"bayId": 0, "occupied": True, "confidence": 1.5}]),
+            (412, [{"bayId": 0, "occupied": True, "confidence": "high"}]),
+            (412, [{"bayId": 0, "occupied": True}, {"bayId": 0, "occupied": False}]),
+        ],
+    )
+    def test_invalid_batch_rejected_socket_stays_open(
+        self, client: TestClient, frame_id: Any, events: Any
+    ) -> None:
+        with client.websocket_connect("/ws/detect") as ws:
+            send_hello(ws)
+            self.send_batch(ws, frame_id, events)
+            error: dict[str, str] = ws.receive_json()
+            assert error["type"] == "error"
+            # The bad batch must not poison the connection.
+            send_frame(ws, 9, make_jpeg())
+            assert read_detections(ws)["frameId"] == 9
+
+    def test_ack_does_not_settle_a_pending_frame(self, client: TestClient) -> None:
+        """A bayState ack mid-flight must not be treated as a frame reply."""
+        with client.websocket_connect("/ws/detect") as ws:
+            send_hello(ws)
+            send_frame(ws, 20, make_jpeg())
+            self.send_batch(ws, 999, [{"bayId": 1, "occupied": True}])
+            first: dict[str, Any] = ws.receive_json()
+            second: dict[str, Any] = ws.receive_json()
+            replies = {first["type"], second["type"]}
+            assert replies == {"detections", "bayStateAck"}
+            ack = first if first["type"] == "bayStateAck" else second
+            assert ack["frameId"] == 999  # echoes the batch, not the frame
+
+
 class TestMalformedInput:
     def test_undecodable_jpeg_rejected_socket_stays_open(self, client: TestClient) -> None:
         with client.websocket_connect("/ws/detect") as ws:

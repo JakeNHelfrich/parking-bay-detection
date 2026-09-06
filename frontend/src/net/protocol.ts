@@ -28,7 +28,36 @@ export interface ErrorMessage {
   readonly message: string;
 }
 
-export type ServerMessage = DetectionsMessage | ErrorMessage;
+/** One reported bay transition inside a `bayState` batch (client → server). */
+export interface BayStateEvent {
+  readonly bayId: number;
+  readonly occupied: boolean;
+  /** Confidence of the matched truck; present only when `occupied` is true. */
+  readonly confidence?: number;
+}
+
+/**
+ * Client → server: confirmed bay occupancy transitions (see
+ * `src/bays/transitions.ts`), batched into one message per frame that
+ * produced at least one transition. `frameId` identifies the detections
+ * frame that confirmed the transitions. Occupancy math stays frontend-only
+ * (invariant 5) — the server records state, it never derives it.
+ */
+export interface BayStateMessage {
+  readonly type: 'bayState';
+  readonly frameId: number;
+  readonly events: readonly BayStateEvent[];
+}
+
+/** Server ack for a `bayState` batch; echoes the batch's `frameId`. */
+export interface BayStateAckMessage {
+  readonly type: 'bayStateAck';
+  readonly frameId: number;
+  /** Number of events accepted from the batch. */
+  readonly accepted: number;
+}
+
+export type ServerMessage = DetectionsMessage | ErrorMessage | BayStateAckMessage;
 
 /** Session header sent once after the socket opens (capture size negotiation). */
 export function helloMessage(captureWidth: number, captureHeight: number): string {
@@ -40,12 +69,21 @@ export function frameHeaderMessage(frameId: number): string {
   return JSON.stringify({ type: 'frame', frameId });
 }
 
+/** Batched bay-transition report; only called with a non-empty event list. */
+export function bayStateMessage(frameId: number, events: readonly BayStateEvent[]): string {
+  return JSON.stringify({ type: 'bayState', frameId, events });
+}
+
 export function isDetectionsMessage(msg: ServerMessage): msg is DetectionsMessage {
   return msg.type === 'detections';
 }
 
 export function isErrorMessage(msg: ServerMessage): msg is ErrorMessage {
   return msg.type === 'error';
+}
+
+export function isBayStateAckMessage(msg: ServerMessage): msg is BayStateAckMessage {
+  return msg.type === 'bayStateAck';
 }
 
 function isValidBbox(value: unknown): value is [number, number, number, number] {
@@ -81,6 +119,13 @@ function parseDetections(raw: Record<string, unknown>): DetectionsMessage | null
   };
 }
 
+function parseBayStateAck(raw: Record<string, unknown>): BayStateAckMessage | null {
+  const { frameId, accepted } = raw;
+  if (typeof frameId !== 'number' || !Number.isInteger(frameId) || frameId < 0) return null;
+  if (typeof accepted !== 'number' || !Number.isInteger(accepted) || accepted < 0) return null;
+  return { type: 'bayStateAck', frameId, accepted };
+}
+
 /**
  * Parses an incoming text-frame payload into a validated ServerMessage.
  * Returns null for anything that does not match the protocol — callers must
@@ -97,6 +142,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
   if (typeof parsed !== 'object' || parsed === null) return null;
   const obj = parsed as Record<string, unknown>;
   if (obj.type === 'detections') return parseDetections(obj);
+  if (obj.type === 'bayStateAck') return parseBayStateAck(obj);
   if (obj.type === 'error') {
     const { message } = obj;
     if (typeof message !== 'string') return null;

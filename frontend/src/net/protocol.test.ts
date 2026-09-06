@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bayStateMessage,
   frameHeaderMessage,
   helloMessage,
+  isBayStateAckMessage,
   isDetectionsMessage,
   isErrorMessage,
   parseServerMessage,
@@ -28,6 +30,18 @@ describe('helloMessage / frameHeaderMessage', () => {
   it('serializes the per-frame header', () => {
     expect(JSON.parse(frameHeaderMessage(412))).toEqual({ type: 'frame', frameId: 412 });
   });
+
+  it('serializes the batched bayState report', () => {
+    const events = [
+      { bayId: 0, occupied: true, confidence: 0.87 },
+      { bayId: 2, occupied: false },
+    ];
+    expect(JSON.parse(bayStateMessage(412, events))).toEqual({
+      type: 'bayState',
+      frameId: 412,
+      events,
+    });
+  });
 });
 
 describe('parseServerMessage', () => {
@@ -44,6 +58,26 @@ describe('parseServerMessage', () => {
     expect(parsed).not.toBeNull();
     expect(isErrorMessage(parsed!)).toBe(true);
     if (isErrorMessage(parsed!)) expect(parsed.message).toBe('bad frame');
+  });
+
+  it('parses a valid bayStateAck message', () => {
+    const parsed = parseServerMessage(JSON.stringify({ type: 'bayStateAck', frameId: 412, accepted: 2 }));
+    expect(parsed).not.toBeNull();
+    expect(isBayStateAckMessage(parsed!)).toBe(true);
+    if (isBayStateAckMessage(parsed!)) {
+      expect(parsed.frameId).toBe(412);
+      expect(parsed.accepted).toBe(2);
+    }
+  });
+
+  it('rejects bayStateAck with a non-integer frameId or accepted', () => {
+    expect(
+      parseServerMessage(JSON.stringify({ type: 'bayStateAck', frameId: 1.5, accepted: 1 })),
+    ).toBeNull();
+    expect(
+      parseServerMessage(JSON.stringify({ type: 'bayStateAck', frameId: 1, accepted: -1 })),
+    ).toBeNull();
+    expect(parseServerMessage(JSON.stringify({ type: 'bayStateAck', frameId: 1 }))).toBeNull();
   });
 
   it('rejects non-JSON text', () => {

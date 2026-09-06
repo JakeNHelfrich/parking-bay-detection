@@ -9,6 +9,15 @@ Wire protocol (backend side):
   exactly one JPEG. The server replies on the same socket with
   ``{"type": "detections", "frameId", "latencyMs", "inferenceMs",
   "detections": [{"cls", "conf", "bbox": [x, y, w, h]}]}``.
+- The client (the one place with the bay map) reports confirmed bay
+  occupancy transitions with batched text messages
+  ``{"type": "bayState", "frameId": int,
+  "events": [{"bayId": int, "occupied": bool, "confidence": float?}]}`` —
+  one message per frame that confirmed at least one transition. Occupancy is
+  derived entirely in the frontend; the server only records what it is told
+  and acknowledges with ``{"type": "bayStateAck", "frameId", "accepted"}``
+  (same frameId). Malformed batches get an ``error`` reply; the socket stays
+  open. Confidence is present only when ``occupied`` is true.
 - Under load the service coalesces frames (latest wins): while one frame is
   being decoded/inferred, a newer complete frame replaces the queued one, and
   superseded frames are skipped without a reply. Clients match replies by
@@ -105,6 +114,36 @@ def _validate_frame_header(message: dict[str, Any]) -> tuple[str | None, int | N
     if not isinstance(frame_id, int) or isinstance(frame_id, bool) or frame_id < 0:
         return "frame.frameId must be a non-negative integer", None
     return None, frame_id
+
+
+def _validate_bay_state(message: dict[str, Any]) -> str | None:
+    """Return an error message for an invalid bayState batch, or None if valid."""
+    frame_id = message.get("frameId")
+    if not isinstance(frame_id, int) or isinstance(frame_id, bool) or frame_id < 0:
+        return "bayState.frameId must be a non-negative integer"
+    events = message.get("events")
+    if not isinstance(events, list) or not events:
+        return "bayState.events must be a non-empty array"
+    seen_bays: set[int] = set()
+    for event in events:
+        if not isinstance(event, dict):
+            return "bayState.events entries must be objects"
+        bay_id = event.get("bayId")
+        if not isinstance(bay_id, int) or isinstance(bay_id, bool) or bay_id < 0:
+            return "bayState.events[].bayId must be a non-negative integer"
+        if bay_id in seen_bays:
+            return f"bayState.events contains duplicate bayId {bay_id}"
+        seen_bays.add(bay_id)
+        occupied = event.get("occupied")
+        if not isinstance(occupied, bool):
+            return "bayState.events[].occupied must be a boolean"
+        confidence = event.get("confidence")
+        if confidence is not None:
+            if not isinstance(confidence, (int, float)) or isinstance(confidence, bool):
+                return "bayState.events[].confidence must be a number"
+            if not 0.0 <= float(confidence) <= 1.0:
+                return "bayState.events[].confidence must be within 0..1"
+    return None
 
 
 @app.websocket("/ws/detect")
@@ -247,6 +286,25 @@ async def ws_detect(socket: WebSocket) -> None:
                 await send_json_safe({"type": "error", "message": error})
                 continue
             pending_frame_id = frame_id
+            continue
+
+        if msg_type == "bayState":
+            error = _validate_bay_state(parsed)
+            if error is not None:
+                await send_json_safe({"type": "error", "message": error})
+                continue
+            events: list[Any] = parsed["events"]
+            # Occupancy math lives in the frontend (invariant 5): the server
+            # records what it is told, never re-derives it. Persistence lands
+            # with the history milestone; for now the batch is acknowledged
+            # (echoing frameId) so the sender knows it was received.
+            await send_json_safe(
+                {
+                    "type": "bayStateAck",
+                    "frameId": parsed["frameId"],
+                    "accepted": len(events),
+                }
+            )
             continue
 
         await send_json_safe({"type": "error", "message": f"unknown message type: {msg_type!r}"})

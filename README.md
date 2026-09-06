@@ -45,6 +45,25 @@ A per-frame text header sent immediately before each binary JPEG, so the server 
 { "type": "frame", "frameId": 412 }
 ```
 
+A batched report of **confirmed** bay occupancy transitions (see below), sent only when at least one transition was confirmed by the referenced frame:
+
+```json
+{
+  "type": "bayState",
+  "frameId": 412,
+  "events": [
+    { "bayId": 0, "occupied": true, "confidence": 0.91 },
+    { "bayId": 2, "occupied": false }
+  ]
+}
+```
+
+`frameId` identifies the detections frame that confirmed the transitions. Occupancy is derived entirely in the frontend (the one place with the bay map — invariant 5): the server only records what it is told, never recomputes it, and acknowledges each batch by echoing its `frameId`:
+
+```json
+{ "type": "bayStateAck", "frameId": 412, "accepted": 2 }
+```
+
 **Backend → Frontend** — JSON text message per frame processed:
 
 ```json
@@ -62,6 +81,8 @@ A per-frame text header sent immediately before each binary JPEG, so the server 
 `bbox` is `[x, y, w, h]` normalized to `0..1`, origin at the **top-left** of the frame (matching canvas coordinates).
 
 Malformed input (undecodable JPEG, missing frame header, invalid JSON) is answered with `{ "type": "error", "message": "…" }` and the socket stays open.
+
+**Confirmed transitions.** Per-frame occupancy can flicker on noisy detections, so the frontend only reports a transition once the new state has held for `TRANSITION_CONFIRMATION_FRAMES` (2) consecutive accepted frames (`src/bays/transitions.ts`). Bays start implicitly empty — "still empty" is never reported — and a batch dropped while the socket is down is not re-sent after reconnect (the tracker keeps its confirmed state, so no duplicates).
 
 **Backpressure (latest-wins).** Inference runs off the event loop, and at most one frame is queued at a time: when a newer complete frame arrives, the queued one is dropped and never replied to. Clients match replies by `frameId` and drop stale results, so under load (inference slower than capture) the backlog converges to the newest frame instead of growing without bound. When the client keeps pace, every frame gets a reply.
 

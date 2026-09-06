@@ -12,12 +12,14 @@ import { FrameCapture, CAPTURE_HEIGHT, CAPTURE_WIDTH } from '../capture/frame-ca
 import { DetectClient, type ConnectionStatus } from '../net/detect-client';
 import {
   isDetectionsMessage,
+  isErrorMessage,
   type DetectionsMessage,
 } from '../net/protocol';
 import { isStaleFrame } from '../net/stale-frame';
 import { resolveDetectWsUrl } from '../net/ws-url';
 import { loadBayLayout } from '../bays/bay-defs';
 import { computeBayStates } from '../bays/occupancy';
+import { BayStateTracker } from '../bays/transitions';
 import { Overlay } from '../overlay/overlay';
 import { createBayField } from '../scene/bays';
 import { createDepotScenery } from '../scene/scenery';
@@ -67,14 +69,24 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
 
   const capture = new FrameCapture(CAPTURE_WIDTH, CAPTURE_HEIGHT);
 
+  // Confirmed-transition tracking (bead rzo.1): bay states are re-derived
+  // every accepted frame; only transitions that hold for
+  // TRANSITION_CONFIRMATION_FRAMES are reported to the server via `bayState`
+  // batches. The frontend is the one place with the bay map — occupancy math
+  // stays here (invariant 5); the server only records what it is told.
+  const bayTracker = new BayStateTracker();
+
   const client = new DetectClient({
     url: wsUrl,
     captureWidth: CAPTURE_WIDTH,
     captureHeight: CAPTURE_HEIGHT,
     onMessage(message) {
       if (!isDetectionsMessage(message)) {
-        // Protocol errors (e.g. malformed frame) keep the socket open; log only.
-        console.warn('[detect] server error:', message.message);
+        if (isErrorMessage(message)) {
+          // Protocol errors (e.g. malformed frame) keep the socket open; log only.
+          console.warn('[detect] server error:', message.message);
+        }
+        // bayStateAck: receipt confirmation for a reported batch — nothing to do.
         return;
       }
       // Stale = not newer than the result the overlay already shows.
@@ -87,6 +99,13 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
         const states = computeBayStates(bayLayout.bays, message.detections);
         overlay.setBayStates(states);
         store.setBayStates(states);
+        // Fire-and-forget: the batch is dropped (never buffered) when the
+        // socket is down; the tracker keeps its confirmed state, so no
+        // duplicate report is sent once reconnected.
+        const transitions = bayTracker.update(states);
+        if (transitions.length > 0) {
+          client.sendBayState(message.frameId, transitions);
+        }
       }
     },
     onStatus(status: ConnectionStatus) {
