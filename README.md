@@ -185,9 +185,14 @@ Trade-off to be aware of: the fine-tuned model is a **sim specialist** — near-
 in this domain, weaker than stock COCO weights on real-world photos. That is the
 correct trade for a demo whose camera is this sim; if the scene ever changes
 (assets, camera, palette), regenerate the dataset the same way and retrain (~30 min).
-(The 2026-09-05 depot-yard overhaul — 4 far-side bays, rigid truck model, warehouse
-scenery, reframed camera — did exactly that: the dataset was recollected from the new
-scene and `simtruck.pt` retrained before the scene landed.)
+(The 2026-09-05 depot-yard overhaul proved this rule twice: the first retrain
+ran on frames captured after the new 4-bay layout and rigid truck landed but
+**before** the warehouse/treeline scenery did — the resulting weights fired on
+trees and missed trucks parked at the dock. Recollecting from the finished
+scene (940 frames / 2 265 boxes, ~6 min of `?gt` capture) and retraining
+(early-stopped at epoch 27/50: precision 1.00, recall 0.996, mAP50 0.995,
+mAP50-95 0.989) cleared both failure modes — parked-at-dock detection and the
+treeline false positives.)
 
 ## Project layout
 
