@@ -92,6 +92,26 @@ Malformed input (undecodable JPEG, missing frame header, invalid JSON) is answer
 
 By default the server runs a **stub detector** (`PARKING_DETECTOR=stub`) that returns canned, deterministic trucks: one parked and one sweeping across the frame per `frameId` — useful for frontend work without model weights. Set `PARKING_DETECTOR=yolo` (plus `pip install -e ".[model]"`) to run real YOLOv8n inference: the model lazy-loads exactly once (weight load failures surface as a 503 on `/health`), detections are filtered to the configured COCO classes (`PARKING_ALLOWED_CLASSES`, default `truck`), and `PARKING_CONF_THRESHOLD` tunes confidence.
 
+### History REST API (`/api/history`)
+
+Read-only GET endpoints over the durable record — any client (a shift supervisor's browser, a webhook consumer, `curl`), not just the live socket, can review the yard's history. JSON contracts live in `server/app/schemas.py` (pydantic, camelCase); aggregation math in `server/app/history.py` (pure, unit-tested); the router in `server/app/api_history.py`. All timestamps are ISO 8601 UTC (timezone-aware `from`/`to` required; naive values are rejected as ambiguous); durations are seconds. A trailing-24h window is used when both bounds are omitted. `bayId`/`from`/`to` echo back in every response. The store only ever holds occupancy episodes — no pixels are stored anywhere in this surface.
+
+- `GET /api/history/timeline/{bayId}?from=&to=` — one bay's occupancy episodes over the window (the "what happened, when" view). Each entry carries `since`/`until` (`until` null while open), `open`, `durationSeconds`, `confidence`, source frame ids, and the `mapVersion` the episode was observed under.
+
+  ```json
+  { "bayId": 0, "from": "…", "to": "…", "intervals": [
+    { "id": 7, "bayId": 0, "mapVersion": "feedface", "since": "…", "until": "…",
+      "open": false, "durationSeconds": 9052.1, "confidence": 0.91,
+      "openFrameId": 412, "closeFrameId": 512 }
+  ] }
+  ```
+
+- `GET /api/history/dwell?from=&to=&bayId=` — per-bay dwell summaries: `episodes`, `totalSeconds`/`meanSeconds`/`maxSeconds` (clipped to the window), and the episode still open at query time, if any (`open`, accrues to the window end).
+
+- `GET /api/history/rollups?granularity=day|shift&from=&to=&bayId=` — occupied seconds per bay per bucket. `day` buckets are UTC calendar days; `shift` buckets are `shiftHours` long (default 12) aligned to `shiftStartHour` UTC (default 6). Episodes spanning a boundary are pro-rated across buckets (a truck parked over a shift boundary contributes time to both shifts); only bays with positive occupied time appear per bucket.
+
+Validation failures (`bad from`/`to`, unknown granularity, out-of-range shift parameters) answer `422`; a degraded record store answers `503` (mirroring the WebSocket path — see `/health`). Queries are read-only and safe to run against the live service while frames are being recorded.
+
 ### Parking bay occupancy
 
 - Bays are defined in `bays.json` as normalized rectangles (same coordinate space as detections), so bay layout can be tuned without code changes. The current map holds **four bays in a single far-side (north) rank** facing the warehouse dock; the near rank between camera and lane was removed in the depot-yard overhaul because its overlay boxes stacked on the far ones.
@@ -239,9 +259,13 @@ parking-bay-detection/
 │   └── index.html
 ├── server/                 # FastAPI + YOLO inference service
 │   ├── app/
-│   │   ├── main.py         # FastAPI app, /health, /ws/detect
+│   │   ├── main.py         # FastAPI app, /health, /ws/detect, /api/history router
 │   │   ├── detection.py    # YOLO model wrapper (lazy-load, class filter)
-│   │   └── config.py       # model name, conf threshold, classes, port
+│   │   ├── recorder.py     # durable SQLite occupancy record (bay episodes)
+│   │   ├── history.py      # pure history aggregation (timeline, dwell, rollups)
+│   │   ├── api_history.py  # read-only REST router: /api/history/*
+│   │   ├── schemas.py      # pydantic JSON contracts for /api/history
+│   │   └── config.py       # model name, conf threshold, classes, db path, port
 │   ├── tests/
 │   └── pyproject.toml
 ├── README.md

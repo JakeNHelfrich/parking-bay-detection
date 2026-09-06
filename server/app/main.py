@@ -1,4 +1,4 @@
-"""FastAPI application: /health and /ws/detect.
+"""FastAPI application: /health, /ws/detect, and the /api/history REST surface.
 
 Wire protocol (backend side):
 
@@ -32,6 +32,15 @@ Wire protocol (backend side):
 - Malformed input (bad JSON, unknown types, undecodable JPEG, missing frame
   header) is answered with ``{"type": "error", "message": str}`` and the socket
   stays open.
+
+REST (read-only, any client — the record is written only via ``bayState``):
+
+- ``GET /api/history/timeline/{bayId}?from=&to=`` — one bay's occupancy
+  episodes over a window.
+- ``GET /api/history/dwell?from=&to=`` — per-bay dwell summaries.
+- ``GET /api/history/rollups?granularity=day|shift&from=&to=`` — occupied
+  seconds per bay per day (UTC) or per shift. Aggregation lives in
+  ``app/history.py``; JSON contracts in ``app/schemas.py``.
 """
 
 from __future__ import annotations
@@ -49,6 +58,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.api_history import router as history_router
 from app.config import Settings, load_settings
 from app.detection import (
     Detector,
@@ -115,6 +125,11 @@ def health() -> JSONResponse:
             },
         )
     return JSONResponse(status_code=200, content=content)
+
+
+# Read-only history REST surface (bead rzo.3); registered before the static
+# mount in `_mount_frontend` so /api routes are matched first.
+app.include_router(history_router)
 
 
 def _validate_hello(message: dict[str, Any]) -> str | None:
