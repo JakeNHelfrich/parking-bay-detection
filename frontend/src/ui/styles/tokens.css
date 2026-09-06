@@ -24,6 +24,11 @@
   /* Muted slate used for secondary elements inside the viewport
      (e.g. empty-state icon circle #4d6d73). */
   --color-viewport-muted: #4d6d73;
+  /* Scrim drawn over the idle scene behind the start CTA (#20343c at 55%). */
+  --color-viewport-scrim: rgb(32 52 60 / 0.55);
+  --color-viewport-scrim-hover: rgb(32 52 60 / 0.45);
+  /* Secondary copy on dark surfaces (idle-CTA subline). */
+  --color-on-dark-muted: rgb(255 255 255 / 0.75);
 
   /* Ink: near-black slate for headings, primary text (#1f333c). */
   --color-ink: #1f333c;

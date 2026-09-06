@@ -53,6 +53,15 @@ describe('bayStatusCopy', () => {
     );
   });
 
+  it('reads Waiting to start while the sim is idle, regardless of state', () => {
+    expect(bayStatusCopy({ bayId: 0, occupied: true }, false)).toBe('Waiting to start');
+    expect(bayStatusCopy({ bayId: 0, occupied: false }, false)).toBe('Waiting to start');
+  });
+
+  it('renders live copy once the sim is running (default argument)', () => {
+    expect(bayStatusCopy({ bayId: 0, occupied: true })).toBe('Occupied · truck detected');
+  });
+
   it('renders a dash for confidence when the bay is unmatched', () => {
     expect(bayStatusCopy({ bayId: 2, occupied: false })).toBe('Clear · — confidence');
   });
@@ -66,6 +75,11 @@ describe('bayTone', () => {
   it('maps any present empty-bay state to the clear (ok) tone, with or without confidence', () => {
     expect(bayTone({ bayId: 0, occupied: false, confidence: 0.98 })).toBe('clear');
     expect(bayTone({ bayId: 0, occupied: false })).toBe('clear'); // "—" copy is still live data
+  });
+
+  it('reads all cards as the unknown tone while the sim is idle', () => {
+    expect(bayTone({ bayId: 0, occupied: true }, false)).toBe('unknown');
+    expect(bayTone(undefined, false)).toBe('unknown');
   });
 
   it('maps missing state entries (stale/no data) to the unknown tone', () => {
@@ -87,6 +101,7 @@ describe('ParkingBaysPanel', () => {
   it('shows state copy from store bayStates, matched by bay id', () => {
     const store = createAppStateStore();
     store.setBayLayout(layout);
+    store.setSimRunning(true); // live copy only exists once the sim runs
     store.setBayStates([
       { bayId: 1, occupied: true, confidence: 0.87 },
       { bayId: 0, occupied: false, confidence: 0.98 },
@@ -99,8 +114,18 @@ describe('ParkingBaysPanel', () => {
   it('falls back to an unmatched (clear, no-confidence) state for unmapped bays', () => {
     const store = createAppStateStore();
     store.setBayLayout(layout); // no setBayStates: store holds no states yet
+    store.setSimRunning(true);
     const html = renderWithStore(store);
     expect(html).toContain('Clear · — confidence');
+  });
+
+  it('reads Waiting to start on every card while the sim is idle', () => {
+    const store = createAppStateStore();
+    store.setBayLayout(layout);
+    store.setBayStates([{ bayId: 1, occupied: true, confidence: 0.87 }]);
+    const html = renderWithStore(store); // simRunning defaults to false
+    expect(html).toContain('Waiting to start');
+    expect(html).not.toContain('Occupied · truck detected');
   });
 
   it('renders nothing when the bay layout has not loaded', () => {

@@ -27,28 +27,30 @@ export function bayLabel(bayId: number): string {
   return `Bay ${String(bayId + 1).padStart(2, '0')}`;
 }
 
-/** Pure copy formatter per the mockup: state + occupancy-confidence bead. */
-export function bayStatusCopy(state: BayState): string {
+/** Pure copy formatter per the mockup: state + occupancy-confidence bead.
+ *  While the sim is idle there is no detection stream yet, so every bay
+ *  reads "Waiting to start" (bead parking-bay-detection-tdq). */
+export function bayStatusCopy(state: BayState, simRunning = true): string {
+  if (!simRunning) return 'Waiting to start';
   if (state.occupied) return 'Occupied · truck detected';
   const pct =
     state.confidence === undefined ? '—' : `${Math.round(state.confidence * 100)}%`;
   return `Clear · ${pct} confidence`;
 }
 
-/** Bay-card accent tone, mirroring the overlay color language
- *  (red FULL / green EMPTY). Any bay present in `bayStates` is live
- *  (computeBayStates emits one state per bay; empty bays just carry no
- *  confidence — hence the "—" copy); a missing entry is stale/no-data. */
-export type BayTone = 'occupied' | 'clear' | 'unknown';
-
-export function bayTone(state: BayState | undefined): BayTone {
-  if (state === undefined) return 'unknown';
+/** Bay-card accent tone: while idle everything is gray "no data yet";
+ *  once running, red FULL / green EMPTY mirroring the overlay colors. */
+export function bayTone(state: BayState | undefined, simRunning = true): BayTone {
+  if (!simRunning || state === undefined) return 'unknown';
   return state.occupied ? 'occupied' : 'clear';
 }
+
+export type BayTone = 'occupied' | 'clear' | 'unknown';
 
 export function ParkingBaysPanel() {
   const bayLayout = useAppState((state) => state.bayLayout);
   const bayStates = useAppState((state) => state.bayStates);
+  const simRunning = useAppState((state) => state.simRunning);
 
   const bays = bayLayout?.bays ?? [];
   // Index BayStates by bay id: the store may hold states computed against a
@@ -67,7 +69,7 @@ export function ParkingBaysPanel() {
             className={[styles.bayCard, toneStyles[tone]].filter(Boolean).join(' ')}
           >
             <h3 className={styles.bayTitle}>{bayLabel(bay.id)}</h3>
-            <p className={styles.bayStatus}>{bayStatusCopy(state ?? fallback)}</p>
+            <p className={styles.bayStatus}>{bayStatusCopy(state ?? fallback, simRunning)}</p>
           </Card>
         );
       })}

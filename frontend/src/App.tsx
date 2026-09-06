@@ -21,7 +21,7 @@ import type { AppStateStore } from './state/store';
 import { mountSim } from './sim/bootstrap';
 import { AppHeader } from './ui/AppHeader';
 import { ParkingBaysPanel } from './ui/ParkingBaysPanel';
-import { CameraIcon } from './ui/components';
+import { PlayIcon } from './ui/components';
 import styles from './App.module.css';
 
 interface AppProps {
@@ -54,7 +54,9 @@ function Shell() {
       <main className={styles.main}>
         <section className={styles.viewportPanel} aria-label="Simulator viewport">
           <div className={styles.simHost} ref={simHostRef} />
-          {simRunning ? null : <ViewportPlaceholder />}
+          {simRunning ? null : (
+            <ViewportPlaceholder onStart={() => store.setSimRunning(true)} />
+          )}
         </section>
         <aside className={styles.sidebar} aria-label="Parking bays">
           <div className={styles.sidebarHeading}>
@@ -69,18 +71,30 @@ function Shell() {
   );
 }
 
-/** Mockup placeholder shown in the viewport while the sim is not running. */
-function ViewportPlaceholder() {
+/**
+ * Idle-viewport start CTA (parking-bay-detection-tdq): until the sim runs,
+ * the whole viewport IS the start button — a video-player-style empty state
+ * (circular play icon + title + subline) over a scrim, so the affordance
+ * sits where the eye already is and idle vs running is unmistakable.
+ * Dispatches the same store command as the header toggle; once running,
+ * this leaves the tree and the header shows Stop.
+ */
+function ViewportPlaceholder(props: { readonly onStart: () => void }) {
   return (
-    <div className={styles.placeholder} role="status">
-      <span className={styles.placeholderIcon}>
-        <CameraIcon size={22} />
+    <button
+      type="button"
+      className={styles.placeholder}
+      onClick={props.onStart}
+      aria-label="Start simulation"
+    >
+      <span className={styles.placeholderPlay} aria-hidden="true">
+        <PlayIcon size={30} />
       </span>
-      <h1 className={styles.placeholderHeadline}>Simulator view ready</h1>
+      <h1 className={styles.placeholderHeadline}>Start simulation</h1>
       <p className={styles.placeholderCopy}>
-        Connect your live computer-vision canvas here. Detection zones, truck
-        paths, and bay overlays will remain the focal point.
+        Run the depot yard to begin truck traffic and watch bay occupancy
+        update live.
       </p>
-    </div>
+    </button>
   );
 }

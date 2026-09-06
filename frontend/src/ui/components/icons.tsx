@@ -39,6 +39,15 @@ export function CameraIcon(props: IconProps) {
   );
 }
 
+/** Play: the idle-viewport start affordance (filled triangle). */
+export function PlayIcon(props: IconProps) {
+  return (
+    <IconSvg {...props}>
+      <path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none" />
+    </IconSvg>
+  );
+}
+
 /** Pulse: inference activity / latency indicator. */
 export function PulseIcon(props: IconProps) {
   return (

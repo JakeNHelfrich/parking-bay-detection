@@ -49,8 +49,10 @@
   display: block;
 }
 
-/* "Simulator view ready" placeholder (bead 6kh) — sits above the sim host,
-   removed from the tree by App.tsx once simRunning flips true. */
+/* Idle-viewport start CTA (parking-bay-detection-tdq) — the whole idle
+   viewport is one button: scrim (idle is unmistakable vs running), circular
+   play affordance, title + subline. Removed from the tree once simRunning
+   flips true; the header keeps the Start/Stop toggle. */
 .placeholder {
   position: absolute;
   inset: 0;
@@ -61,17 +63,43 @@
   gap: var(--space-4);
   text-align: center;
   padding: var(--space-6);
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  /* Scrim over the rendered-but-idle scene. */
+  background: var(--color-viewport-scrim);
+  transition: background var(--transition-base);
 }
 
-.placeholderIcon {
+.placeholder:hover {
+  background: var(--color-viewport-scrim-hover);
+}
+
+.placeholder:focus-visible {
+  outline: var(--border-width) solid var(--color-on-dark);
+  outline-offset: calc(var(--border-width) * -3);
+}
+
+.placeholderPlay {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 3.5rem;
-  height: 3.5rem;
+  width: 4.5rem;
+  height: 4.5rem;
   border-radius: 9999px;
-  background: var(--color-viewport-muted);
+  background: var(--color-btn-dark);
   color: var(--color-on-dark);
+  box-shadow: var(--shadow-raised);
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.placeholder:hover .placeholderPlay {
+  background: var(--color-btn-dark-hover);
+  transform: scale(1.06);
+}
+
+.placeholder:active .placeholderPlay {
+  transform: scale(0.98);
 }
 
 .placeholderHeadline {
@@ -86,7 +114,7 @@
   max-width: 46rem;
   font-size: var(--text-body-size);
   line-height: 1.55;
-  color: var(--color-viewport-muted);
+  color: var(--color-on-dark-muted);
 }
 
 .sidebar {

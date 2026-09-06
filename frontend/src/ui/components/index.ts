@@ -13,4 +13,4 @@
 export { Button, type ButtonProps } from './Button';
 export { Pill, type PillProps } from './Pill';
 export { Card, type CardProps } from './Card';
-export { CameraIcon, PulseIcon, type IconProps } from './icons';
+export { CameraIcon, PlayIcon, PulseIcon, type IconProps } from './icons';
