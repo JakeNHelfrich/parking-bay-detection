@@ -33,7 +33,7 @@ Wire protocol (backend side):
   header) is answered with ``{"type": "error", "message": str}`` and the socket
   stays open.
 
-REST (read-only, any client — the record is written only via ``bayState``):
+REST (read-only history, alert record):
 
 - ``GET /api/history/timeline/{bayId}?from=&to=`` — one bay's occupancy
   episodes over a window.
@@ -41,12 +41,20 @@ REST (read-only, any client — the record is written only via ``bayState``):
 - ``GET /api/history/rollups?granularity=day|shift&from=&to=`` — occupied
   seconds per bay per day (UTC) or per shift. Aggregation lives in
   ``app/history.py``; JSON contracts in ``app/schemas.py``.
+- ``GET /api/alerts?unacknowledged=&limit=`` — durable alerts derived by the
+  rules engine (overstay past the bay's dwell window, after-hours activity);
+  ``POST /api/alerts/{id}/ack`` acknowledges one. Rules are data
+  (``alert_rules.json``: per-bay dwell windows, active hours); evaluation
+  sweeps the record (no timers) on each ``bayState`` batch and before listing.
+  Delivery is in-app (this surface) plus an optional webhook out
+  (``PARKING_ALERT_WEBHOOK_URL``); email/SMS deferred.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import sqlite3
 import time
 from collections.abc import AsyncIterator
@@ -58,6 +66,10 @@ from fastapi import FastAPI, WebSocket
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.alert_store import AlertStore, StoredAlert
+from app.alerts import AlertRules, AlertRulesError, load_rules
+from app.api_alerts import router as alerts_router
+from app.api_alerts import sweep
 from app.api_history import router as history_router
 from app.config import Settings, load_settings
 from app.detection import (
@@ -69,6 +81,9 @@ from app.detection import (
     detections_to_wire,
 )
 from app.recorder import OccupancyRecorder
+from app.webhook import AlertSink, sink_from_url
+
+logger = logging.getLogger(__name__)
 
 settings: Settings = load_settings()
 
@@ -88,6 +103,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.recorder = OccupancyRecorder(settings.db_path)
     except sqlite3.Error as exc:
         app.state.recorder_error = str(exc)
+    # Durable alert record + rules-as-data (bead rzo.5). Failures degrade to
+    # /health surface exactly like the recorder — the live board keeps working.
+    app.state.alert_store: AlertStore | None = None
+    app.state.alert_error: str | None = None
+    app.state.alert_rules: AlertRules | None = None
+    app.state.alert_sink: AlertSink | None = None
+    try:
+        app.state.alert_store = AlertStore(settings.db_path)
+    except sqlite3.Error as exc:
+        app.state.alert_error = str(exc)
+    try:
+        app.state.alert_rules = load_rules(settings.alert_rules_path)
+    except AlertRulesError as exc:
+        app.state.alert_error = str(exc)
+    app.state.alert_sink = sink_from_url(settings.alert_webhook_url)
     try:
         detector = create_detector(settings)
         # Lazily-loaded backends expose ensure_loaded; force the weight load
@@ -104,6 +134,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     recorder: OccupancyRecorder | None = app.state.recorder
     if recorder is not None:
         recorder.close()
+    alert_store: AlertStore | None = app.state.alert_store
+    if alert_store is not None:
+        alert_store.close()
 
 
 app = FastAPI(title="parking-bay-detection", version="0.1.0", lifespan=lifespan)
@@ -115,6 +148,8 @@ def health() -> JSONResponse:
     content: dict[str, Any] = {"status": "ok", "model": app.state.model_label}
     if app.state.recorder is None:
         content["recorder"] = {"status": "error", "detail": app.state.recorder_error}
+    if app.state.alert_store is None or app.state.alert_rules is None:
+        content["alerts"] = {"status": "error", "detail": app.state.alert_error}
     if app.state.detector is None:
         return JSONResponse(
             status_code=503,
@@ -127,9 +162,11 @@ def health() -> JSONResponse:
     return JSONResponse(status_code=200, content=content)
 
 
-# Read-only history REST surface (bead rzo.3); registered before the static
-# mount in `_mount_frontend` so /api routes are matched first.
+# Read-only history REST surface (bead rzo.3) and alert record (bead rzo.5);
+# registered before the static mount in `_mount_frontend` so /api routes are
+# matched first.
 app.include_router(history_router)
+app.include_router(alerts_router)
 
 
 def _validate_hello(message: dict[str, Any]) -> str | None:
@@ -364,6 +401,13 @@ async def ws_detect(socket: WebSocket) -> None:
             # stamped with the session's bay map version so layout changes
             # over time never corrupt history.
             recorder.record(events, session_map_version, parsed["frameId"])
+            # Alert rules sweep the record on every confirmed batch (bead
+            # rzo.5): overstay/after-hours candidates become durable alerts,
+            # deduped by the store, and genuinely new ones go out the
+            # webhook (best-effort, off the event loop).
+            new_alerts = sweep_alerts(app)
+            for alert in new_alerts:
+                deliver_alert(app, alert, background_tasks)
             await send_json_safe(
                 {
                     "type": "bayStateAck",
@@ -374,6 +418,64 @@ async def ws_detect(socket: WebSocket) -> None:
             continue
 
         await send_json_safe({"type": "error", "message": f"unknown message type: {msg_type!r}"})
+
+
+def _alert_triplet(app: FastAPI) -> tuple[OccupancyRecorder, AlertStore, AlertRules] | None:
+    """The (recorder, alert store, rules) trio, or None when degraded."""
+    recorder: OccupancyRecorder | None = app.state.recorder
+    store: AlertStore | None = app.state.alert_store
+    rules: AlertRules | None = app.state.alert_rules
+    if recorder is None or store is None or rules is None:
+        return None
+    return recorder, store, rules
+
+
+def sweep_alerts(app: FastAPI) -> list[StoredAlert]:
+    """Run the rules sweep; empty list when the alert surface is degraded."""
+    parts = _alert_triplet(app)
+    if parts is None:
+        return []
+    return sweep(*parts)
+
+
+def alert_payload(alert: StoredAlert) -> dict[str, Any]:
+    """Wire shape of an alert (matches the REST ``AlertOut`` contract)."""
+    return {
+        "id": alert.id,
+        "bayId": alert.bay_id,
+        "rule": alert.rule,
+        "since": alert.since,
+        "raisedAt": alert.raised_at,
+        "acknowledged": alert.acknowledged,
+        "detail": alert.detail,
+    }
+
+
+def deliver_alert(
+    app: FastAPI,
+    alert: StoredAlert,
+    background_tasks: set[asyncio.Task[None]],
+) -> None:
+    """Best-effort webhook delivery, off the event loop with a timeout.
+
+    A slow or failing webhook must never block recording or the socket:
+    failures are logged and the alert remains in the durable record, so the
+    in-app surface (and any later re-delivery mechanism) still has it.
+    """
+    sink: AlertSink | None = app.state.alert_sink
+    if sink is None:
+        return
+    payload = alert_payload(alert)
+
+    async def run() -> None:
+        try:
+            await asyncio.wait_for(asyncio.to_thread(sink.deliver, payload), timeout=10.0)
+        except Exception:  # noqa: BLE001 - delivery is best-effort by contract
+            logger.warning("alert webhook delivery failed for alert %s", alert.id)
+
+    task = asyncio.create_task(run())
+    background_tasks.add(task)
+    task.add_done_callback(background_tasks.discard)
 
 
 def _mount_frontend(application: FastAPI) -> None:

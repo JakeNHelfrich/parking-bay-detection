@@ -93,6 +93,17 @@ class Settings:
     # History must survive restarts, so this is a real file by default;
     # tests point it at a temporary path.
     db_path: str = field(default_factory=lambda: _env_str("PARKING_DB_PATH", "occupancy.db"))
+    # Alert thresholds as data (bead rzo.5): per-bay dwell windows and active
+    # hours live in this JSON file, not code. Missing file = built-in
+    # defaults; malformed content surfaces via /health, not silent mis-alerting.
+    alert_rules_path: str = field(
+        default_factory=lambda: _env_str("PARKING_ALERT_RULES", "alert_rules.json")
+    )
+    # Optional webhook URL for alert delivery out of the app (bead rzo.5).
+    # Empty means in-app only (the REST/UI surface); email/SMS deferred.
+    alert_webhook_url: str = field(
+        default_factory=lambda: _env_str("PARKING_ALERT_WEBHOOK_URL", "")
+    )
     # Directory containing the built frontend (frontend/dist) to serve at "/".
     # Single-container deploys bake the build in here; empty/missing dir means
     # "not served" (local dev uses the Vite dev server instead).

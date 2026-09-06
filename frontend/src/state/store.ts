@@ -12,6 +12,7 @@ import type { BayLayout } from '../bays/bay-defs';
 import type { BayState } from '../bays/occupancy';
 import type { ConnectionStatus } from '../net/detect-client';
 import type { DetectionsMessage } from '../net/protocol';
+import type { AlertSummary } from '../net/alerts-api';
 
 /** HUD figures driving the React health card (latency/fps). */
 export interface HudStats {
@@ -33,6 +34,10 @@ export interface AppState {
   readonly hud: HudStats;
   /** True while the demo pipeline (render + capture loop) is running. */
   readonly simRunning: boolean;
+  /** Unacknowledged alerts from the durable record (polled REST, rzo.5). */
+  readonly alerts: readonly AlertSummary[];
+  /** Last alerts-fetch error message, or null while healthy. */
+  readonly alertsError: string | null;
 }
 
 export interface AppStateStore {
@@ -46,6 +51,9 @@ export interface AppStateStore {
   setBayStates(states: readonly BayState[]): void;
   setHud(hud: HudStats): void;
   setSimRunning(running: boolean): void;
+  setAlerts(alerts: readonly AlertSummary[]): void;
+  setAlertsError(message: string | null): void;
+  removeAlert(id: number): void;
 }
 
 const INITIAL_HUD: HudStats = {
@@ -63,6 +71,8 @@ export function createAppStateStore(): AppStateStore {
     bayStates: [],
     hud: INITIAL_HUD,
     simRunning: false,
+    alerts: [],
+    alertsError: null,
   };
   const listeners = new Set<() => void>();
 
@@ -100,6 +110,15 @@ export function createAppStateStore(): AppStateStore {
     },
     setSimRunning(running: boolean): void {
       update({ simRunning: running });
+    },
+    setAlerts(alerts: readonly AlertSummary[]): void {
+      update({ alerts: [...alerts], alertsError: null });
+    },
+    setAlertsError(message: string | null): void {
+      update({ alertsError: message });
+    },
+    removeAlert(id: number): void {
+      update({ alerts: state.alerts.filter((alert) => alert.id !== id) });
     },
   };
 }

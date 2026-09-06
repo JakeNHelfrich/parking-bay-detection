@@ -19,6 +19,13 @@ import { useEffect, useRef } from 'react';
 import { AppStateProvider, useAppState, useAppStateStore } from './state/react';
 import type { AppStateStore } from './state/store';
 import { mountSim } from './sim/bootstrap';
+import {
+  createAlertsClient,
+  resolveAlertsApiBase,
+  type AlertsClient,
+} from './net/alerts-api';
+import { startAlertPolling, type AlertPolling } from './sim/alert-polling';
+import { AlertsPanel } from './ui/AlertsPanel';
 import { AppHeader } from './ui/AppHeader';
 import { ParkingBaysPanel } from './ui/ParkingBaysPanel';
 import { PlayIcon } from './ui/components';
@@ -48,6 +55,20 @@ function Shell() {
     return mountSim(host, store);
   }, [store]);
 
+  // Alert polling (bead rzo.5) is independent of the sim lifecycle: the
+  // yard's durable record is live whether or not the render loop is running.
+  const pollingRef = useRef<AlertPolling | null>(null);
+  useEffect(() => {
+    const base = resolveAlertsApiBase(import.meta.env.VITE_ALERTS_API_URL, window.location);
+    const client: AlertsClient = createAlertsClient(base);
+    const polling = startAlertPolling(store, client);
+    pollingRef.current = polling;
+    return () => {
+      polling.dispose();
+      pollingRef.current = null;
+    };
+  }, [store]);
+
   return (
     <div className={styles.shell}>
       <AppHeader />
@@ -65,9 +86,32 @@ function Shell() {
             <span className={styles.sidebarMeta}>{bayLayout?.bays.length ?? 0} monitored</span>
           </div>
           <ParkingBaysPanel />
+          {/* In-app notification area (rzo.5): durable alerts from the record.
+              Renders only when there is news; acks dispatch via polling glue. */}
+          <AlertsAreaShell onAcknowledge={(id) => pollingRef.current?.acknowledge(id)} />
         </aside>
       </main>
     </div>
+  );
+}
+
+/**
+ * Sidebar notification area: reads the alerts snapshot from the store and
+ * dispatches acknowledgements through the polling glue (ack is optimistic —
+ * see `alert-polling.ts`). `now` is taken at render time: the store
+ * re-renders on every poll (15s), which is the freshness the coarse age
+ * copy needs.
+ */
+function AlertsAreaShell(props: { readonly onAcknowledge: (id: number) => void }) {
+  const alerts = useAppState((state) => state.alerts);
+  const alertsError = useAppState((state) => state.alertsError);
+  return (
+    <AlertsPanel
+      alerts={alerts}
+      error={alertsError}
+      now={new Date()}
+      onAcknowledge={props.onAcknowledge}
+    />
   );
 }
 

@@ -1,0 +1,6 @@
+{
+  "_comment": "Alert thresholds as data (bead rzo.5) — loaded by app/alerts.py. Per-bay dwell windows are config, not code (invariant 5 style): 'dwellMinutes' is the default, 'dwellMinutesByBay' overrides per stable bay id. 'activeHours' is the UTC window in which yard activity is expected; episodes opening outside it raise afterHours alerts.",
+  "dwellMinutes": 240,
+  "dwellMinutesByBay": {},
+  "activeHours": { "startHour": 6, "endHour": 22 }
+}

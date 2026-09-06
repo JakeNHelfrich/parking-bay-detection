@@ -87,3 +87,34 @@ class RollupsResponse(BaseModel):
     from_: str = Field(serialization_alias="from", validation_alias="from")
     to: str
     buckets: list[BucketRollupOut]
+
+
+# --- Alerts (bead rzo.5) -----------------------------------------------------
+
+
+class AlertOut(BaseModel):
+    """One raised alert from the durable record."""
+
+    id: int
+    bayId: int
+    rule: str
+    # Opening time of the episode that triggered the alert.
+    since: str
+    raisedAt: str
+    acknowledged: bool
+    # Rule-specific detail (dwellMinutes/elapsedMinutes for overstay,
+    # activeHours for afterHours).
+    detail: dict[str, object]
+
+
+class AlertsResponse(BaseModel):
+    """Alert list, newest first."""
+
+    alerts: list[AlertOut]
+
+
+class AlertAckResponse(BaseModel):
+    """Acknowledgement result for one alert."""
+
+    id: int
+    acknowledged: bool

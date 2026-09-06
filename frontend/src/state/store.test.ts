@@ -15,6 +15,16 @@ const layout: BayLayout = { version: 1, bays: [{ id: 0, side: 'north', rect: [0.
 
 const hud: HudStats = { frameId: 42, latencyMs: 88, inferenceMs: 71, captureFps: 11.5 };
 
+const alert = {
+  id: 7,
+  bayId: 2,
+  rule: 'overstay',
+  since: '2026-09-06T08:00:00+00:00',
+  raisedAt: '2026-09-06T12:00:00+00:00',
+  acknowledged: false,
+  detail: { dwellMinutes: 240, elapsedMinutes: 245.5, stillOpen: true },
+} as const;
+
 describe('createAppStateStore', () => {
   it('starts with a defined initial state', () => {
     const store = createAppStateStore();
@@ -25,6 +35,8 @@ describe('createAppStateStore', () => {
     expect(state.bayStates).toEqual([]);
     expect(state.hud).toEqual({ frameId: null, latencyMs: null, inferenceMs: null, captureFps: 0 });
     expect(state.simRunning).toBe(false);
+    expect(state.alerts).toEqual([]);
+    expect(state.alertsError).toBeNull();
   });
 
   it('getState returns a new reference after each publish, stable between them', () => {
@@ -111,5 +123,35 @@ describe('createAppStateStore', () => {
     store.setDetections(detections);
     store.setDetections({ ...detections, frameId: 43 });
     expect(calls).toBe(1);
+  });
+
+  describe('alerts (rzo.5)', () => {
+    it('setAlerts publishes a snapshot copy and clears the error', () => {
+      const store = createAppStateStore();
+      store.setAlertsError('boom');
+      store.setAlerts([alert]);
+      const state = store.getState();
+      expect(state.alerts).toEqual([alert]);
+      expect(state.alerts).not.toBe([alert]); // copied, not aliased
+      expect(state.alertsError).toBeNull();
+    });
+
+    it('setAlertsError records the failure without touching alerts', () => {
+      const store = createAppStateStore();
+      store.setAlerts([alert]);
+      store.setAlertsError('boom');
+      expect(store.getState().alertsError).toBe('boom');
+      expect(store.getState().alerts).toEqual([alert]);
+    });
+
+    it('removeAlert drops exactly the acknowledged id (optimistic ack)', () => {
+      const store = createAppStateStore();
+      const other = { ...alert, id: 8, bayId: 3 };
+      store.setAlerts([alert, other]);
+      store.removeAlert(7);
+      expect(store.getState().alerts).toEqual([other]);
+      store.removeAlert(999); // unknown id is a no-op
+      expect(store.getState().alerts).toEqual([other]);
+    });
   });
 });

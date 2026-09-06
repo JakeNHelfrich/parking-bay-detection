@@ -112,6 +112,26 @@ Read-only GET endpoints over the durable record — any client (a shift supervis
 
 Validation failures (`bad from`/`to`, unknown granularity, out-of-range shift parameters) answer `422`; a degraded record store answers `503` (mirroring the WebSocket path — see `/health`). Queries are read-only and safe to run against the live service while frames are being recorded.
 
+### Alerts (`/api/alerts`, bead rzo.5)
+
+A small rules engine derives alerts from the same durable record — no second source of truth, no pixels, and the rules never re-derive occupancy (invariant 5: they read what the frontend reported). Two rules cover the roadmap's conditions:
+
+- **`overstay`** — a bay occupied past its dwell window. This is the "blocked bay / truck that never leaves" condition: the bay is unavailable past its expected turnover time. The per-bay dwell window is **data, not code**: `dwellMinutes` (default 240) with `dwellMinutesByBay` overrides keyed by stable bay id, living in `server/alert_rules.json` (path overridable via `PARKING_ALERT_RULES`).
+- **`afterHours`** — an episode that *opened* outside the configured active hours (`activeHours: {startHour, endHour}` UTC, default 06:00–22:00; midnight-wrapping windows supported) — overnight/after-hours activity. Closed episodes still count: a truck that stayed overnight and left at dawn still deserves the alert.
+
+**Evaluation is a sweep, not a timer.** Every `bayState` batch (and every `GET /api/alerts` listing) re-derives which alerts the record implies *now*: open episodes accrue toward their dwell window, and an episode opened outside active hours flags even after it closes. A truck that sits 5 hours silently therefore still gets its overstay alert the moment any event arrives or someone looks at the panel — no background tasks, no protocol changes.
+
+**Dedup + persistence.** Alerts live in the same SQLite record as occupancy history (`alerts` table, unique per `(rule, episode)`), so the sweep is idempotent — an alert is raised exactly once per rule per episode, and alerts survive a restart together with the record (`tests/test_alert_store.py` restart test is the acceptance gate).
+
+**Delivery.** In-app first: the sidebar notification area (`src/ui/AlertsPanel.tsx`) polls `GET /api/alerts?unacknowledged=true` every 15s (`src/sim/alert-polling.ts`), shows bay + rule + coarse age + detail copy, and acknowledges via `POST /api/alerts/{id}/ack` (optimistic UI; the next poll restores the authoritative list). Plus a pluggable webhook out: set `PARKING_ALERT_WEBHOOK_URL` and every newly raised alert is POSTed as JSON (best-effort, off the event loop, 10s timeout — a failing webhook is logged and never blocks recording; the alert remains in the durable record). Email/SMS are deferred — they would be further `AlertSink` implementations (`server/app/webhook.py`), not new alert logic.
+
+```json
+{ "alerts": [{ "id": 7, "bayId": 1, "rule": "overstay", "since": "…", "raisedAt": "…",
+  "acknowledged": false, "detail": { "dwellMinutes": 240, "elapsedMinutes": 305.2, "stillOpen": true } }] }
+```
+
+A degraded alert surface (store open failure, malformed rules file) degrades exactly like the recorder: surfaced via `alerts` on `/health`, the API answers `503`, and the live board keeps working.
+
 ### Parking bay occupancy
 
 - Bays are defined in `bays.json` as normalized rectangles (same coordinate space as detections), so bay layout can be tuned without code changes. The current map holds **four bays in a single far-side (north) rank** facing the warehouse dock; the near rank between camera and lane was removed in the depot-yard overhaul because its overlay boxes stacked on the far ones.
@@ -126,7 +146,7 @@ The UI is a React 18 app mounted over the imperative sim pipeline (`frontend/src
 
 - **State**: a single immutable-snapshot store (`src/state/store.ts`) created at the composition root; React reads it through `useSyncExternalStore` (`src/state/react.ts`). The render loop reads the latest snapshot per frame — no subscriptions, no awaits (decoupled render/inference).
 - **Header** (`src/ui/AppHeader.tsx`): connection pill (green "Live feed connected" / red "Live feed offline"), inference health pill (`InferenceStatus.tsx`: healthy / degraded / offline from connection status + `latencyMs`, `INFERENCE_HEALTHY_MAX_MS` in `src/config.ts`, with live fps/latency stats) — the two status pills form one cluster in the header meta row — plus the camera chip and Start/Stop control. Restacks on mobile (<768px). No brand/logo: the header starts with the status cluster (branding removed).
-- **Sidebar** (`src/ui/`): one card per bay from `bays.json` (identity = bay id, occupancy from frontend matching), color-coded by state (green clear / red occupied / gray no-data).
+- **Sidebar** (`src/ui/`): one card per bay from `bays.json` (identity = bay id, occupancy from frontend matching), color-coded by state (green clear / red occupied / gray no-data), plus the alerts notification area above it (`AlertsPanel.tsx`, renders only when there is news).
 - **The React UI is the HUD.** The 2D overlay canvas (`src/overlay/overlay.ts`) draws only detection boxes + bay rects; the former canvas HUD (fps/latency text, offline banner) was replaced by the header status pills.
 - **Offline/reconnect**: the WebSocket client reconnects with backoff (`src/net/backoff.ts`); while disconnected the sim keeps rendering, the overlay freezes on the last accepted result, and the pill + health card show the offline state until the socket re-opens.
 - **`?gt` dev mode** bypasses the pipeline entirely (no overlay/WS): the sim renders as usual while a secondary loop exports ground-truth JPEG+box pairs (see [Fine-tuning](#fine-tuning-for-the-sim-domain-why-the-weights-are-custom)).
@@ -144,6 +164,9 @@ All knobs are environment variables (see `server/app/config.py`):
 | `PARKING_IMGSZ` | *(model default, 640)* | Inference input size (longest edge, px). Larger = better small-object recall, proportionally slower |
 | `PARKING_TORCH_THREADS` | *(torch default)* | Cap on torch intra-op threads. Set to the machine's vCPU count — **must be 1 on single-vCPU hosts** (Fly shared/performance-1x), where torch's per-host-core default thrashes the quota |
 | `PARKING_HOST` / `PARKING_PORT` | `127.0.0.1` / `8000` | Bind address |
+| `PARKING_DB_PATH` | `occupancy.db` | SQLite file for the durable record (occupancy episodes + alerts) |
+| `PARKING_ALERT_RULES` | `alert_rules.json` | Alert thresholds as data (per-bay dwell windows, active hours); missing file = built-in defaults |
+| `PARKING_ALERT_WEBHOOK_URL` | *(unset)* | Webhook URL for alert delivery out of the app; unset = in-app only |
 
 Measured inference latency (yolov8n, CPU, Apple Silicon, Ultralytics `bus.jpg`, `conf=0.35`):
 
@@ -259,13 +282,18 @@ parking-bay-detection/
 │   └── index.html
 ├── server/                 # FastAPI + YOLO inference service
 │   ├── app/
-│   │   ├── main.py         # FastAPI app, /health, /ws/detect, /api/history router
+│   │   ├── main.py         # FastAPI app, /health, /ws/detect, /api/history + /api/alerts routers
 │   │   ├── detection.py    # YOLO model wrapper (lazy-load, class filter)
 │   │   ├── recorder.py     # durable SQLite occupancy record (bay episodes)
 │   │   ├── history.py      # pure history aggregation (timeline, dwell, rollups)
 │   │   ├── api_history.py  # read-only REST router: /api/history/*
-│   │   ├── schemas.py      # pydantic JSON contracts for /api/history
+│   │   ├── alerts.py       # alert rules engine (pure sweep; thresholds as data)
+│   │   ├── alert_store.py  # durable SQLite alert record (dedup per rule+episode)
+│   │   ├── api_alerts.py   # alert REST router: /api/alerts, /api/alerts/{id}/ack
+│   │   ├── webhook.py      # pluggable alert delivery (HTTP webhook out)
+│   │   ├── schemas.py      # pydantic JSON contracts for the REST surfaces
 │   │   └── config.py       # model name, conf threshold, classes, db path, port
+│   ├── alert_rules.json    # alert thresholds as data (per-bay dwell windows, active hours)
 │   ├── tests/
 │   └── pyproject.toml
 ├── README.md
