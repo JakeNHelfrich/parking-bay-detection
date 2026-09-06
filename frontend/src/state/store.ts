@@ -11,7 +11,7 @@
 import type { BayLayout } from '../bays/bay-defs';
 import type { BayState } from '../bays/occupancy';
 import type { ConnectionStatus } from '../net/detect-client';
-import type { DetectionsMessage } from '../net/protocol';
+import type { BaySnapshotEntry, DetectionsMessage } from '../net/protocol';
 import type { AlertSummary } from '../net/alerts-api';
 
 /** HUD figures driving the React health card (latency/fps). */
@@ -49,6 +49,14 @@ export interface AppStateStore {
   setDetections(message: DetectionsMessage): void;
   setBayLayout(layout: BayLayout): void;
   setBayStates(states: readonly BayState[]): void;
+  /**
+   * Merges a late-joiner `baySnapshot` (rzo.6) into `bayStates`: bays with a
+   * recorded open episode become occupied; unmentioned bays keep whatever
+   * state they already have. The next detections frame re-derives every bay
+   * from live video and overwrites this — the snapshot is a connect-time
+   * bridge, not a second occupancy authority.
+   */
+  applyBaySnapshot(entries: readonly BaySnapshotEntry[]): void;
   setHud(hud: HudStats): void;
   setSimRunning(running: boolean): void;
   setAlerts(alerts: readonly AlertSummary[]): void;
@@ -104,6 +112,21 @@ export function createAppStateStore(): AppStateStore {
     },
     setBayStates(states: readonly BayState[]): void {
       update({ bayStates: [...states] });
+    },
+
+    applyBaySnapshot(entries: readonly BaySnapshotEntry[]): void {
+      if (entries.length === 0) return; // nothing recorded: keep current view
+      const snapshotStates = new Map(
+        entries.map((entry) => [
+          entry.bayId,
+          { bayId: entry.bayId, occupied: true, confidence: entry.confidence } satisfies BayState,
+        ]),
+      );
+      const merged = state.bayStates.map((existing) => snapshotStates.get(existing.bayId) ?? existing);
+      for (const [bayId, state] of snapshotStates) {
+        if (!merged.some((existing) => existing.bayId === bayId)) merged.push(state);
+      }
+      update({ bayStates: merged });
     },
     setHud(hud: HudStats): void {
       update({ hud });

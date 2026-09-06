@@ -8,6 +8,7 @@ malformed input (socket stays open and remains usable).
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -15,10 +16,25 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from tests.conftest import make_jpeg
+from tests.test_alerts_api import seed_episode
 
 
-def send_hello(socket: Any) -> None:
+def read_hello_reply(socket: Any) -> dict[str, Any]:
+    """Drain a valid hello's immediate reply (rzo.6 late-joiner handshake).
+
+    A valid hello is always answered: a ``baySnapshot`` of the record's open
+    episodes — or an ``error`` when the record store is degraded. Callers
+    that care about the payload use the return value; everyone else just
+    needs the reply consumed so the next read belongs to their own message.
+    """
+    reply: dict[str, Any] = socket.receive_json()
+    assert reply["type"] in ("baySnapshot", "error")
+    return reply
+
+
+def send_hello(socket: Any) -> dict[str, Any]:
     socket.send_json({"type": "hello", "captureWidth": 960, "captureHeight": 540})
+    return read_hello_reply(socket)
 
 
 def send_frame(socket: Any, frame_id: int, jpeg: bytes) -> None:
@@ -103,10 +119,11 @@ class TestFramePipeline:
             assert read_detections(ws)["frameId"] == 13
 
     def test_hello_only_session_is_accepted(self, client: TestClient) -> None:
-        """hello with no frames: server stays connected and silent."""
+        """hello with no frames: answered with the snapshot, then silence."""
         with client.websocket_connect("/ws/detect") as ws:
-            send_hello(ws)
-            # No exception; nothing to read. Closing is clean.
+            reply = send_hello(ws)
+            assert reply["type"] == "baySnapshot"
+            # Nothing further arrives; closing is clean.
             ws.close()
 
 
@@ -186,10 +203,11 @@ class TestBayState:
             assert ack["frameId"] == 999  # echoes the batch, not the frame
 
 
-def hello_with_map_version(socket: Any, map_version: str) -> None:
+def hello_with_map_version(socket: Any, map_version: str) -> dict[str, Any]:
     socket.send_json(
         {"type": "hello", "captureWidth": 960, "captureHeight": 540, "bayMapVersion": map_version}
     )
+    return read_hello_reply(socket)
 
 
 class TestBayStateRecording:
@@ -295,6 +313,88 @@ class TestBayStateRecording:
                 assert row.close_frame_id == 11
         finally:
             main_module.settings = original_settings
+
+
+class TestBaySnapshot:
+    """Late-joiner handshake (rzo.6): a valid hello is answered with the
+    durable record's open episodes so a second viewer (supervisor pulling up
+    the board) sees the yard's truth at connect, without waiting for the next
+    transition. The snapshot is a read-only projection of the record — never
+    a re-derivation of occupancy (invariant 5) — and carries no frameId
+    because hello has none.
+    """
+
+    def test_hello_lists_open_episodes_with_dwell(
+        self, db_path: str, db_client: TestClient
+    ) -> None:
+        opened = datetime.now(UTC) - timedelta(hours=3)
+        seed_episode(db_path, bay_id=2, since_iso=opened.isoformat(), until_iso=None)
+        with db_client.websocket_connect("/ws/detect") as ws:
+            reply = hello_with_map_version(ws, "map-hash-b")
+        assert reply["type"] == "baySnapshot"
+        assert set(reply) == {"type", "serverTime", "bays"}
+        # serverTime parses and is sane (close to now, timezone-aware).
+        server_time = datetime.fromisoformat(reply["serverTime"])
+        assert abs((datetime.now(UTC) - server_time).total_seconds()) < 60
+        [entry] = reply["bays"]
+        assert entry["bayId"] == 2
+        assert entry["since"] == opened.isoformat()
+        assert entry["mapVersion"] == "map-hash-a"  # provenance of the opening session
+        assert entry["confidence"] == 0.9
+        # Dwell is measured on the server clock, not re-derived from video.
+        assert 3 * 3600 - 60 <= entry["dwellSeconds"] <= 3 * 3600 + 60
+
+    def test_closed_episodes_are_not_live_state(self, db_path: str, db_client: TestClient) -> None:
+        """Closed episodes are history (/api/history), not the live board."""
+        opened = datetime.now(UTC) - timedelta(days=1)
+        closed = opened + timedelta(hours=2)
+        seed_episode(db_path, bay_id=0, since_iso=opened.isoformat(), until_iso=closed.isoformat())
+        with db_client.websocket_connect("/ws/detect") as ws:
+            reply = hello_with_map_version(ws, "map-hash-a")
+        assert reply["type"] == "baySnapshot"
+        assert reply["bays"] == []
+
+    def test_empty_record_yields_empty_snapshot(self, db_client: TestClient) -> None:
+        with db_client.websocket_connect("/ws/detect") as ws:
+            reply = send_hello(ws)
+        assert reply["type"] == "baySnapshot"
+        assert reply["bays"] == []
+
+    def test_snapshot_after_live_report_on_the_same_socket(self, db_client: TestClient) -> None:
+        """A second connect sees what the first session reported (the actual
+        supervisor-pulls-up-the-board scenario, end to end)."""
+        with db_client.websocket_connect("/ws/detect") as first:
+            hello_with_map_version(first, "map-hash-live")
+            TestBayState.send_batch(first, 1, [{"bayId": 1, "occupied": True, "confidence": 0.7}])
+            assert first.receive_json()["type"] == "bayStateAck"
+        with db_client.websocket_connect("/ws/detect") as second:
+            reply = hello_with_map_version(second, "map-hash-live")
+        assert reply["type"] == "baySnapshot"
+        [entry] = reply["bays"]
+        assert entry["bayId"] == 1
+        assert entry["mapVersion"] == "map-hash-live"
+        assert entry["confidence"] == 0.7
+        assert entry["dwellSeconds"] >= 0
+
+    def test_recorder_degraded_hello_answers_error_socket_stays_open(
+        self, db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A degraded record store must not send an empty (lying) snapshot."""
+        monkeypatch.setattr(db_client.app.state, "recorder", None)
+        with db_client.websocket_connect("/ws/detect") as ws:
+            reply = hello_with_map_version(ws, "map-hash-a")
+            assert reply["type"] == "error"
+            assert "snapshot" in reply["message"]
+            # The socket remains fully usable.
+            send_frame(ws, 6, make_jpeg())
+            assert read_detections(ws)["frameId"] == 6
+
+    def test_invalid_hello_gets_error_not_snapshot(self, client: TestClient) -> None:
+        with client.websocket_connect("/ws/detect") as ws:
+            ws.send_json({"type": "hello", "captureWidth": -1, "captureHeight": 540})
+            reply: dict[str, Any] = ws.receive_json()
+            assert reply["type"] == "error"
+            assert "captureWidth" in reply["message"]
 
 
 class TestMalformedInput:

@@ -65,6 +65,8 @@ def test_websocket_takes_precedence_over_mount(
     with TestClient(mounted_app) as test_client:
         with test_client.websocket_connect("/ws/detect") as ws:
             ws.send_json({"type": "hello", "captureWidth": 64, "captureHeight": 64})
+            hello_reply = ws.receive_json()
+            assert hello_reply["type"] in ("baySnapshot", "error")  # rzo.6 late-joiner reply
             ws.send_json({"type": "frame", "frameId": 7})
             ws.send_bytes(make_jpeg())
             reply = ws.receive_json()

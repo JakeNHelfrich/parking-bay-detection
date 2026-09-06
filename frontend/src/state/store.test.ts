@@ -125,6 +125,44 @@ describe('createAppStateStore', () => {
     expect(calls).toBe(1);
   });
 
+  describe('applyBaySnapshot (rzo.6)', () => {
+    const entry = (bayId: number, confidence?: number) => ({
+      bayId,
+      since: '2026-09-06T08:00:00+00:00',
+      dwellSeconds: 300,
+      confidence,
+      mapVersion: 'feedface',
+    });
+
+    it('marks recorded bays occupied and leaves unmentioned bays alone', () => {
+      const store = createAppStateStore();
+      store.setBayStates([
+        { bayId: 0, occupied: false, confidence: undefined },
+        { bayId: 1, occupied: true, confidence: 0.5 },
+      ]);
+      store.applyBaySnapshot([entry(1, 0.9), entry(3)]);
+      const states = store.getState().bayStates;
+      expect(states).toEqual([
+        { bayId: 0, occupied: false, confidence: undefined }, // untouched
+        { bayId: 1, occupied: true, confidence: 0.9 }, // refreshed by record
+        { bayId: 3, occupied: true, confidence: undefined }, // new from record
+      ]);
+    });
+
+    it('treats an empty snapshot as "nothing recorded", not "everything empty"', () => {
+      const store = createAppStateStore();
+      store.setBayStates([{ bayId: 0, occupied: true, confidence: 0.8 }]);
+      store.applyBaySnapshot([]);
+      expect(store.getState().bayStates).toEqual([{ bayId: 0, occupied: true, confidence: 0.8 }]);
+    });
+
+    it('does not touch the alerts surface', () => {
+      const store = createAppStateStore();
+      store.applyBaySnapshot([entry(2)]);
+      expect(store.getState().alerts).toEqual([]);
+    });
+  });
+
   describe('alerts (rzo.5)', () => {
     it('setAlerts publishes a snapshot copy and clears the error', () => {
       const store = createAppStateStore();

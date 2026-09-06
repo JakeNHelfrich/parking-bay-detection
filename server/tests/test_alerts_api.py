@@ -153,6 +153,10 @@ def connect_with_map_version(ws: Any) -> None:
     ws.send_json(
         {"type": "hello", "captureWidth": 960, "captureHeight": 540, "bayMapVersion": "map-hash-a"}
     )
+    # Valid hello is answered with the late-joiner baySnapshot (rzo.6);
+    # drain it so the next read belongs to the batch under test.
+    reply: dict[str, Any] = ws.receive_json()
+    assert reply["type"] in ("baySnapshot", "error")
 
 
 class TestWebSocketRaisedAlerts:

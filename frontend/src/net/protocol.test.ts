@@ -3,6 +3,7 @@ import {
   bayStateMessage,
   frameHeaderMessage,
   helloMessage,
+  isBaySnapshotMessage,
   isBayStateAckMessage,
   isDetectionsMessage,
   isErrorMessage,
@@ -124,6 +125,73 @@ describe('parseServerMessage', () => {
 
   it('rejects error messages with a non-string message', () => {
     expect(parseServerMessage(JSON.stringify({ type: 'error', message: 42 }))).toBeNull();
+  });
+
+  describe('baySnapshot (rzo.6)', () => {
+    const entry = {
+      bayId: 1,
+      since: '2026-09-06T08:00:00+00:00',
+      dwellSeconds: 305.2,
+      confidence: 0.9,
+      mapVersion: 'feedface',
+    };
+
+    it('parses a valid snapshot with entries', () => {
+      const raw = JSON.stringify({ type: 'baySnapshot', serverTime: '2026-09-06T12:00:00Z', bays: [entry] });
+      expect(parseServerMessage(raw)).toEqual({
+        type: 'baySnapshot',
+        serverTime: '2026-09-06T12:00:00Z',
+        bays: [entry],
+      });
+    });
+
+    it('parses an empty snapshot and drops optional confidence', () => {
+      const raw = JSON.stringify({
+        type: 'baySnapshot',
+        serverTime: '2026-09-06T12:00:00Z',
+        bays: [{ ...entry, confidence: undefined }],
+      });
+      const parsed = parseServerMessage(raw);
+      expect(parsed).toEqual({
+        type: 'baySnapshot',
+        serverTime: '2026-09-06T12:00:00Z',
+        bays: [{ bayId: 1, since: entry.since, dwellSeconds: 305.2, mapVersion: 'feedface' }],
+      });
+    });
+
+    it('rejects malformed snapshots', () => {
+      const base = { type: 'baySnapshot', serverTime: '2026-09-06T12:00:00Z', bays: [] };
+      expect(parseServerMessage(JSON.stringify({ ...base, serverTime: 'not a date' }))).toBeNull();
+      expect(parseServerMessage(JSON.stringify({ ...base, bays: 'no' }))).toBeNull();
+      expect(
+        parseServerMessage(JSON.stringify({ ...base, bays: [{ ...entry, bayId: -1 }] })),
+      ).toBeNull();
+      expect(
+        parseServerMessage(JSON.stringify({ ...base, bays: [{ ...entry, since: 'nope' }] })),
+      ).toBeNull();
+      expect(
+        parseServerMessage(JSON.stringify({ ...base, bays: [{ ...entry, dwellSeconds: -1 }] })),
+      ).toBeNull();
+      expect(
+        parseServerMessage(JSON.stringify({ ...base, bays: [{ ...entry, mapVersion: '' }] })),
+      ).toBeNull();
+      expect(
+        parseServerMessage(JSON.stringify({ ...base, bays: [{ ...entry, confidence: 'high' }] })),
+      ).toBeNull();
+      expect(parseServerMessage(JSON.stringify({ ...base, bays: ['junk'] }))).toBeNull();
+    });
+
+    it('narrows via isBaySnapshotMessage', () => {
+      const msg = parseServerMessage(
+        JSON.stringify({ type: 'baySnapshot', serverTime: '2026-09-06T12:00:00Z', bays: [] }),
+      );
+      expect(msg).not.toBeNull();
+      if (msg && isBaySnapshotMessage(msg)) {
+        expect(msg.serverTime).toBe('2026-09-06T12:00:00Z');
+      } else {
+        expect.unreachable('snapshot should parse and narrow');
+      }
+    });
   });
 
   it('rejects non-string input', () => {

@@ -66,6 +66,21 @@ A batched report of **confirmed** bay occupancy transitions (see below), sent on
 { "type": "bayStateAck", "frameId": 412, "accepted": 2 }
 ```
 
+**Backend → Frontend** — besides `detections`, `error`, and `bayStateAck` replies, every valid `hello` is answered with the **late-joiner snapshot** (rzo.6): every currently-open occupancy episode from the durable record, so a second viewer (a supervisor pulling up the board) sees the yard's truth at connect instead of waiting for the next transition:
+
+```json
+{
+  "type": "baySnapshot",
+  "serverTime": "2026-09-06T12:00:00.123456+00:00",
+  "bays": [
+    { "bayId": 1, "since": "2026-09-06T08:00:00+00:00", "dwellSeconds": 14400.1,
+      "confidence": 0.93, "mapVersion": "1a2b3c4d" }
+  ]
+}
+```
+
+The snapshot is a read-only projection of the record — never a re-derivation of occupancy (invariant 5) — and carries no `frameId` because hello has none. The frontend merges it into its bay-state view (recorded bays render occupied immediately); the next detections frame re-derives every bay from live video and takes over, and the merge deliberately bypasses the transition tracker so no spurious reports echo back to the server. An empty `bays` means nothing is recorded, not that the yard is empty. When the record store is degraded the reply is an `error` instead of a lying snapshot. Deeper history (closed episodes, rollups, dwell) comes from [`/api/history`](#history-rest-api-apihistory), not this socket.
+
 **Durable record.** Accepted batches are persisted by `server/app/recorder.py` to SQLite (`PARKING_DB_PATH`, default `occupancy.db`) as per-bay occupancy episodes — bay id, state, `since`/`until` (server clock, ISO 8601 UTC), source frame ids, confidence, and the session's `bayMapVersion`. Reporting is idempotent (a duplicate open is a no-op; empty→empty is a no-op) and open episodes survive a restart untouched — the restart-persistence test is the acceptance gate (`server/tests/test_recorder.py`, `test_ws_detect.py::TestBayStateRecording`).
 
 **Backend → Frontend** — JSON text message per frame processed:

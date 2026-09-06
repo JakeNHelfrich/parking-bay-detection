@@ -11,6 +11,7 @@
 import { FrameCapture, CAPTURE_HEIGHT, CAPTURE_WIDTH } from '../capture/frame-capture';
 import { DetectClient, type ConnectionStatus } from '../net/detect-client';
 import {
+  isBaySnapshotMessage,
   isDetectionsMessage,
   isErrorMessage,
   type DetectionsMessage,
@@ -85,6 +86,19 @@ export function mountSim(container: HTMLElement, store: AppStateStore): () => vo
         if (isErrorMessage(message)) {
           // Protocol errors (e.g. malformed frame) keep the socket open; log only.
           console.warn('[detect] server error:', message.message);
+          return;
+        }
+        if (isBaySnapshotMessage(message)) {
+          // Late-joiner handshake (rzo.6): the durable record's open episodes,
+          // delivered right after hello, paint the board before the first
+          // detections frame arrives. Merged into the current view — the next
+          // frame re-derives every bay from live video and takes over. This is
+          // recorded provenance, not an occupancy re-derivation (invariant 5),
+          // and deliberately bypasses the transition tracker so no spurious
+          // reports go back to the server (its record already matches).
+          store.applyBaySnapshot(message.bays);
+          overlay.setBayStates(store.getState().bayStates);
+          return;
         }
         // bayStateAck: receipt confirmation for a reported batch — nothing to do.
         return;

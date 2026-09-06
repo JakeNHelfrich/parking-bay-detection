@@ -24,6 +24,16 @@ Wire protocol (backend side):
   is present only when ``occupied`` is true. Every recorded episode is
   stamped with the session's ``bayMapVersion`` so bay-layout changes over
   time never corrupt history.
+- Late-joiner handshake (rzo.6): immediately after a valid hello the server
+  replies with ``{"type": "baySnapshot", "serverTime": iso, "bays": [...]}``
+  listing every currently-open occupancy episode from the durable record
+  (bayId, since, dwellSeconds, confidence, mapVersion) — a second viewer
+  sees the yard's truth at connect without waiting for the next transition.
+  The snapshot is a read-only projection of the record, never a
+  re-derivation of occupancy (invariant 5); it carries no frameId because
+  hello has none. Later truth still arrives the usual way: detections +
+  frontend-derived bay states per frame. History beyond the live snapshot
+  comes from ``/api/history``, not this socket.
 - Under load the service coalesces frames (latest wins): while one frame is
   being decoded/inferred, a newer complete frame replaces the queued one, and
   superseded frames are skipped without a reply. Clients match replies by
@@ -59,6 +69,7 @@ import sqlite3
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -184,6 +195,35 @@ def _validate_hello(message: dict[str, Any]) -> str | None:
     if version is not None and (not isinstance(version, str) or not version or len(version) > 128):
         return "hello.bayMapVersion must be a non-empty string (max 128 chars)"
     return None
+
+
+def _bay_snapshot_payload(app: FastAPI) -> dict[str, Any] | None:
+    """Build the late-joiner ``baySnapshot`` payload, or None when degraded.
+
+    Read-only projection of the durable record's open episodes — the server
+    never re-derives occupancy here (invariant 5): it reports exactly what
+    the frontend told it, with dwell measured on the server clock.
+    """
+    recorder: OccupancyRecorder | None = app.state.recorder
+    if recorder is None:
+        return None
+    now = datetime.now(UTC)
+    bays: list[dict[str, Any]] = []
+    for interval in recorder.intervals():
+        if interval.until is not None or interval.state != 1:
+            continue  # closed episodes are history (/api/history), not live state
+        since = datetime.fromisoformat(interval.since)
+        dwell = max(0.0, (now - since).total_seconds())
+        entry: dict[str, Any] = {
+            "bayId": interval.bay_id,
+            "since": interval.since,
+            "dwellSeconds": round(dwell, 1),
+            "mapVersion": interval.map_version,
+        }
+        if interval.confidence is not None:
+            entry["confidence"] = interval.confidence
+        bays.append(entry)
+    return {"type": "baySnapshot", "serverTime": now.isoformat(), "bays": bays}
 
 
 def _validate_frame_header(message: dict[str, Any]) -> tuple[str | None, int | None]:
@@ -358,11 +398,23 @@ async def ws_detect(socket: WebSocket) -> None:
             if error is not None:
                 await send_json_safe({"type": "error", "message": error})
                 continue
-            # Valid hello needs no reply; capture size is recorded for later
-            # milestones and never leaks into normalized coordinates.
+            # Valid hello gets the late-joiner snapshot (rzo.6): the yard's
+            # current recorded truth immediately, before any frame arrives.
+            # Capture size is recorded for later milestones and never leaks
+            # into normalized coordinates.
             version = parsed.get("bayMapVersion")
             if isinstance(version, str) and version:
                 session_map_version = version
+            snapshot = _bay_snapshot_payload(app)
+            if snapshot is None:
+                await send_json_safe(
+                    {
+                        "type": "error",
+                        "message": "bay snapshot unavailable: recorder degraded; see /health",
+                    }
+                )
+            else:
+                await send_json_safe(snapshot)
             continue
 
         if msg_type == "frame":
